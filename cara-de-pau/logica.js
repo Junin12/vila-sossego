@@ -6,7 +6,7 @@
 // Lábia: cada blefe que passa sem ninguém duvidar dá +1 lábia (só o dono vê). Pego no blefe, zera.
 // Com lábia suficiente, o jogador pode declarar vitória na sua vez.
 
-const { MORADORES, ACOES, EVENTOS, COPIAS, MOEDAS_INICIO, ESCANDALO_OBRIGATORIO } = require('../public/cara-de-pau/moradores');
+const { MORADORES, ACOES, EVENTOS, moradoresDa, COPIAS, MOEDAS_INICIO, MOEDAS_RELAMPAGO, ESCANDALO_OBRIGATORIO } = require('../public/cara-de-pau/moradores');
 
 class RuleError extends Error {}
 const fail = (msg) => { throw new RuleError(msg); };
@@ -22,10 +22,14 @@ function shuffle(g, arr) {
   return arr;
 }
 
-const blockerOf = (a) => Object.keys(MORADORES).find((k) => MORADORES[k].bloqueia.includes(a)) || null;
+// Quem bloqueia a ação (só entre os moradores da partida, quando g é passado).
+const blockerOf = (a, g) => (g ? g.moradores : Object.keys(MORADORES)).find((k) => MORADORES[k].bloqueia.includes(a)) || null;
 const P = (g, pid) => g.players.find((p) => p.id === pid);
 const alive = (p) => p.cards.filter((c) => !c.lost);
 const inGame = (g) => g.players.filter((p) => !p.out);
+// Duplas: parceiros sentam em lados opostos da mesa (time = posição % metade).
+const parceiros = (g, a, b) => !!g.duplas && a.team === b.team && a.id !== b.id;
+const timeDe = (g, p) => g.players.filter((x) => x.team === p.team).map((x) => x.id);
 const ev = (g) => (g.evento ? EVENTOS[g.evento] : {});
 const custo = (g, a) => { const c = ev(g).custos; return c && c[a] != null ? c[a] : ACOES[a].custo; };
 
@@ -34,20 +38,24 @@ function log(g, entry) {
   if (g.log.length > LOG_MAX) g.log.shift();
 }
 
-// opts: { labia: nº de blefes para vencer (0 = desligado), eventos: modo Eventos da Vila, rnd }
+// opts: { labia: nº de blefes para vencer (0 = desligado), eventos: modo Eventos da Vila, feira: expansão Feira,
+//         cartas: 2 (normal) ou 1 (Relâmpago), duplas: times de dois (4 ou 6 jogadores), rnd }
 function newGame(ids, opts = {}) {
   if (ids.length < 2 || ids.length > 6) fail('O jogo é de 2 a 6 jogadores.');
+  if (opts.duplas && ids.length !== 4 && ids.length !== 6) fail('O modo Duplas é com 4 ou 6 jogadores.');
+  const cartas = opts.cartas === 1 ? 1 : 2;
   const g = {
     rnd: opts.rnd || defaultRnd, labiaWin: opts.labia == null ? 4 : opts.labia, eventos: !!opts.eventos, evento: null, volta: 0,
+    moradores: moradoresDa(!!opts.feira), cartas, duplas: !!opts.duplas, priv: {},
     players: [], deck: [], turn: 0, phase: 'turn', pend: null, claim: null, waiting: [], loser: null, then: null,
-    log: [], seq: 0, winner: null, how: null,
+    log: [], seq: 0, winner: null, winners: null, how: null,
   };
-  for (const k of Object.keys(MORADORES)) for (let i = 0; i < COPIAS; i++) g.deck.push(k);
+  for (const k of g.moradores) for (let i = 0; i < COPIAS; i++) g.deck.push(k);
   shuffle(g, g.deck);
-  for (const id of ids) {
-    g.players.push({ id, coins: MOEDAS_INICIO, cards: [{ c: g.deck.pop(), lost: false }, { c: g.deck.pop(), lost: false }],
-      labia: 0, preso: false, out: false, stats: { blefes: 0, pego: 0, acertos: 0, erros: 0 } });
-  }
+  ids.forEach((id, i) => {
+    g.players.push({ id, coins: cartas === 1 ? MOEDAS_RELAMPAGO : MOEDAS_INICIO, cards: Array.from({ length: cartas }, () => ({ c: g.deck.pop(), lost: false })),
+      labia: 0, preso: false, out: false, team: g.duplas ? i % (ids.length / 2) : i, stats: { blefes: 0, pego: 0, acertos: 0, erros: 0 } });
+  });
   g.turn = g.rnd(ids.length);
   g.first = g.turn;
   g.waiting = [g.players[g.turn].id];
@@ -65,7 +73,8 @@ function swapCard(g, p, idx) {
 
 function endGame(g, winner, how) {
   g.phase = 'end'; g.winner = winner; g.how = how; g.waiting = []; g.claim = null; g.pend = null; g.loser = null; g.then = null;
-  log(g, { t: 'fim', by: winner, how });
+  g.winners = timeDe(g, P(g, winner));
+  log(g, { t: 'fim', by: winner, how, dupla: g.duplas ? g.winners : null });
 }
 
 function killCard(g, p, idx) {
@@ -75,7 +84,7 @@ function killCard(g, p, idx) {
     p.out = true; p.preso = false;
     log(g, { t: 'fora', by: p.id });
     const rest = inGame(g);
-    if (rest.length === 1) endGame(g, rest[0].id, 'ultimo');
+    if (new Set(rest.map((x) => x.team)).size === 1) endGame(g, rest[0].id, 'ultimo');
   }
 }
 
@@ -84,7 +93,7 @@ function requireLoss(g, pid, then) {
   const p = P(g, pid);
   const live = alive(p);
   if (live.length === 1) killCard(g, p, p.cards.indexOf(live[0]));
-  if (live.length !== 2) { if (g.phase !== 'end') then(); return; }
+  if (live.length < 2) { if (g.phase !== 'end') then(); return; }
   g.phase = 'lose'; g.loser = pid; g.waiting = [pid]; g.then = then;
 }
 
@@ -120,13 +129,13 @@ function openReact(g, claim) {
   if (ev(g).semDuvida) claim = { ...claim, noDoubt: true };
   g.claim = claim;
   g.waiting = inGame(g).filter((p) => p.id !== claim.by && !p.preso).map((p) => p.id);
-  if (claim.blockOnly || claim.noDoubt) g.waiting = g.waiting.filter((id) => claim.kind === 'acao' && id === g.pend.target && blockerOf(g.pend.a));
+  if (claim.blockOnly || claim.noDoubt) g.waiting = g.waiting.filter((id) => claim.kind === 'acao' && id === g.pend.target && blockerOf(g.pend.a, g));
   if (!g.waiting.length) allPassed(g);
 }
 
 function canBlock(g, pid) {
   const c = g.claim;
-  return c && c.kind === 'acao' && pid === g.pend.target && !!blockerOf(g.pend.a);
+  return c && c.kind === 'acao' && pid === g.pend.target && !!blockerOf(g.pend.a, g);
 }
 
 function effect(g) {
@@ -146,6 +155,17 @@ function effect(g) {
       break;
     }
     case 'mudanca': swapCard(g, me, g.pend.idx); break;
+    case 'pechincha': {
+      const ricos = inGame(g).filter((x) => x.id !== actor && x.coins > me.coins).sort((a, b) => b.coins - a.coins).slice(0, 3);
+      for (const x of ricos) { x.coins -= 1; me.coins += 1; }
+      break;
+    }
+    case 'confissao': {
+      const vivas = alive(t);
+      const c = vivas[g.rnd(vivas.length)];
+      (g.priv[actor] = g.priv[actor] || []).push({ alvo: target, c: c.c, volta: g.volta });
+      break;
+    }
     case 'escandalo': case 'fofoca': return requireLoss(g, target, () => nextTurn(g));
     default: break;
   }
@@ -164,7 +184,7 @@ function allPassed(g) {
 function declare(g, p, move) {
   const a = move.a;
   const def = ACOES[a];
-  if (!def) fail('Ação desconhecida.');
+  if (!def || (def.carta && !g.moradores.includes(def.carta))) fail('Ação desconhecida.');
   const forced = p.coins >= ESCANDALO_OBRIGATORIO;
   if (forced && a !== 'escandalo') fail(`Com ${ESCANDALO_OBRIGATORIO} moedas ou mais, você tem que fazer um Escândalo.`);
   if (p.preso && !forced && a !== 'bico') fail('Você está preso: nesta vez só pode fazer bico.');
@@ -176,6 +196,7 @@ function declare(g, p, move) {
   if (def.alvo) {
     const t = P(g, move.target);
     if (!t || t.out || t.id === p.id) fail('Escolha um alvo válido.');
+    if (parceiros(g, p, t)) fail('Não dá para atacar sua dupla!');
     target = t.id;
   }
   let idx = null;
@@ -205,7 +226,7 @@ function doubt(g, p) {
     requireLoss(g, p.id, () => {
       if (c.kind === 'bloqueio') { log(g, { t: 'bloqueado', by: g.pend.actor, a: g.pend.a }); return nextTurn(g); }
       const t = g.pend.target && P(g, g.pend.target);
-      if (t && !t.out && !t.preso && blockerOf(g.pend.a)) return openReact(g, { ...c, verified: true, blockOnly: true });
+      if (t && !t.out && !t.preso && blockerOf(g.pend.a, g)) return openReact(g, { ...c, verified: true, blockOnly: true });
       effect(g);
     });
   } else {
@@ -253,7 +274,7 @@ function act(g, pid, move) {
   }
   if (t === 'bloquear') {
     if (!canBlock(g, pid)) fail('Você não pode bloquear isso.');
-    const card = blockerOf(g.pend.a);
+    const card = blockerOf(g.pend.a, g);
     log(g, { t: 'bloqueio', by: pid, card, a: g.pend.a });
     return openReact(g, { by: pid, card, kind: 'bloqueio' });
   }
@@ -271,7 +292,7 @@ function timeout(g) {
   if (g.phase === 'turn') {
     const p = g.players[g.turn];
     if (p.coins >= ESCANDALO_OBRIGATORIO) {
-      const others = inGame(g).filter((x) => x.id !== p.id);
+      const others = inGame(g).filter((x) => x.id !== p.id && !parceiros(g, p, x));
       return act(g, p.id, { t: 'acao', a: 'escandalo', target: others[g.rnd(others.length)].id });
     }
     act(g, p.id, { t: 'acao', a: 'bico' });
@@ -282,7 +303,10 @@ function timeout(g) {
 function viewFor(g, pid) {
   const end = g.phase === 'end';
   const me = P(g, pid);
+  const vejo = (p) => end || p.id === pid || (me && parceiros(g, me, p));   // na dupla, um vê os segredos do outro
   return {
+    moradores: g.moradores, cartas: g.cartas, duplas: g.duplas, winners: g.winners,
+    priv: (me && g.priv[pid]) || [],
     phase: g.phase, turn: g.players[g.turn].id, waiting: g.waiting, loser: g.loser,
     pend: g.pend && { a: g.pend.a, actor: g.pend.actor, target: g.pend.target },
     claim: g.claim && { by: g.claim.by, card: g.claim.card, kind: g.claim.kind, verified: !!g.claim.verified },
@@ -290,8 +314,8 @@ function viewFor(g, pid) {
     labiaWin: g.labiaWin, deck: g.deck.length, winner: g.winner, how: g.how, log: g.log, evento: g.evento, volta: g.volta,
     custos: Object.fromEntries(Object.keys(ACOES).map((a) => [a, custo(g, a)])), bico: ev(g).bico || 1,
     players: g.players.map((p) => ({
-      id: p.id, coins: p.coins, preso: p.preso, out: p.out,
-      cards: p.cards.map((c) => ({ lost: c.lost, c: (c.lost || end || p.id === pid) ? c.c : null })),
+      id: p.id, coins: p.coins, preso: p.preso, out: p.out, team: p.team,
+      cards: p.cards.map((c) => ({ lost: c.lost, c: (c.lost || vejo(p)) ? c.c : null })),
       labia: (p.id === pid || end) ? p.labia : null,
       stats: end ? p.stats : null,
     })),
@@ -299,4 +323,4 @@ function viewFor(g, pid) {
   };
 }
 
-module.exports = { newGame, act, timeout, viewFor, blockerOf, custo, alive, RuleError };
+module.exports = { newGame, act, timeout, viewFor, blockerOf, custo, alive, parceiros, RuleError };

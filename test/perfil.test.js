@@ -58,6 +58,38 @@ test('perfil antigo/incompleto é completado', () => {
   Perfil.touch(p, '2026-11-01');
   assert.equal(p.cdp.blefes, 0);
   assert.ok(p.daily);
+  assert.equal(p.temp.id, '2026-11');
+});
+
+test('temporada: 3 metas diferentes por mês, iguais para todos', () => {
+  for (const mes of ['2026-11', '2026-12', '2027-01', '2027-06']) {
+    const t = Perfil.temporada(mes);
+    assert.equal(t.metas.length, 3);
+    assert.equal(new Set(t.metas.map((m) => m.id)).size, 3, mes);
+    assert.deepEqual(Perfil.temporada(mes).metas.map((m) => m.id), t.metas.map((m) => m.id));
+  }
+  assert.equal(Perfil.temporada('2026-12').nome, 'Natal na Vila');
+});
+
+test('temporada completa dá XP, selo e conquista uma vez só', () => {
+  const p = Perfil.blank();
+  const day = '2026-11-05';
+  Perfil.touch(p, day);
+  let done = null;
+  const evento = { jogo: 'nd', won: true, team: 'capangas', blefes: 3, duvidasCertas: 2, votosCertos: 2, survived: true };
+  for (let i = 0; i < 40 && !done; i++) {
+    const r = Perfil.onGame(p, { ...evento, jogo: i % 2 ? 'nd' : 'cdp', team: i % 4 === 1 ? 'capangas' : 'vila' }, day);
+    if (r.seasonDone) done = r;
+  }
+  assert.ok(done, 'completou a temporada');
+  assert.ok(p.temp.done);
+  assert.equal(p.temporadas['2026-11'], 'Novembro dos Mistérios');
+  assert.ok(p.ach.temp1);
+  const r = Perfil.onGame(p, evento, day);
+  assert.ok(!r.seasonDone, 'não completa de novo');
+  Perfil.touch(p, '2026-12-01');
+  assert.equal(p.temp.id, '2026-12');
+  assert.ok(!p.temp.done, 'mês novo, temporada nova');
 });
 
 console.log(`Passaporte: ${passed} testes passaram`);

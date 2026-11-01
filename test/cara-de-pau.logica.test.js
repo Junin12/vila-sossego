@@ -254,4 +254,107 @@ test('estatísticas de dúvida', () => {
   assert.equal(pl(g, 'p0').stats.pego, 1);
 });
 
+test('feira desligada: ações da expansão não existem', () => {
+  const g = setup([['prefeito', 'agiota'], ['delegada', 'fofoqueira']]);
+  assert.ok(!g.moradores.includes('padre'));
+  assert.throws(() => L.act(g, 'p0', { t: 'acao', a: 'pechincha' }), /desconhecida/);
+  assert.equal(L.blockerOf('prisao', g), null, 'sem padre, prisão não tem bloqueio');
+});
+
+test('pechincha: 1 moeda de cada mais rico (até 3)', () => {
+  const g = setup([['feirante', 'agiota'], ['delegada', 'fofoqueira'], ['prefeito', 'padre'], ['agiota', 'agiota']], { feira: true });
+  pl(g, 'p0').coins = 1; pl(g, 'p1').coins = 5; pl(g, 'p2').coins = 1; pl(g, 'p3').coins = 3;
+  L.act(g, 'p0', { t: 'acao', a: 'pechincha' });
+  passAll(g);
+  assert.equal(pl(g, 'p0').coins, 3);
+  assert.equal(pl(g, 'p1').coins, 4);
+  assert.equal(pl(g, 'p2').coins, 1, 'quem não é mais rico não paga');
+});
+
+test('confissão: espia um segredo, só quem fez vê', () => {
+  const g = setup([['padre', 'agiota'], ['delegada', 'fofoqueira'], ['prefeito', 'agiota']], { feira: true });
+  L.act(g, 'p0', { t: 'acao', a: 'confissao', target: 'p1' });
+  passAll(g);
+  const v = L.viewFor(g, 'p0');
+  assert.equal(v.priv.length, 1);
+  assert.equal(v.priv[0].alvo, 'p1');
+  assert.ok(['delegada', 'fofoqueira'].includes(v.priv[0].c));
+  assert.equal(L.viewFor(g, 'p2').priv.length, 0);
+});
+
+test('padre bloqueia a prisão', () => {
+  const g = setup([['delegada', 'agiota'], ['padre', 'fofoqueira']], { feira: true });
+  pl(g, 'p0').coins = 3;
+  L.act(g, 'p0', { t: 'acao', a: 'prisao', target: 'p1' });
+  assert.ok(L.viewFor(g, 'p1').canBlock);
+  L.act(g, 'p1', { t: 'bloquear' });
+  L.act(g, 'p0', { t: 'passar' });
+  assert.ok(!pl(g, 'p1').preso);
+});
+
+test('relâmpago: um segredo só e 3 moedas', () => {
+  const g = L.newGame(['a', 'b', 'c'], { rnd: () => 0, cartas: 1 });
+  assert.ok(g.players.every((p) => p.cards.length === 1 && p.coins === 3));
+  const g2 = setup([['prefeito'], ['delegada'], ['agiota']], { cartas: 1 });
+  pl(g2, 'p0').coins = 7;
+  L.act(g2, 'p0', { t: 'acao', a: 'escandalo', target: 'p1' });
+  assert.ok(pl(g2, 'p1').out, 'perdeu o único segredo e saiu');
+});
+
+test('duplas: precisa de 4 ou 6, não ataca a dupla e vê os segredos dela', () => {
+  assert.throws(() => L.newGame(['a', 'b', 'c'], { duplas: true }), /Duplas/);
+  const g = setup([['prefeito', 'agiota'], ['delegada', 'fofoqueira'], ['benzedeira', 'agiota'], ['delegada', 'prefeito']], { duplas: true });
+  assert.ok(L.parceiros(g, pl(g, 'p0'), pl(g, 'p2')));
+  pl(g, 'p0').coins = 7;
+  assert.throws(() => L.act(g, 'p0', { t: 'acao', a: 'escandalo', target: 'p2' }), /dupla/);
+  const v = L.viewFor(g, 'p0');
+  assert.equal(v.players[2].cards[0].c, 'benzedeira', 'vê a dupla');
+  assert.equal(v.players[1].cards[0].c, null, 'não vê o adversário');
+});
+
+test('duplas: a dupla vence junta quando só ela sobra', () => {
+  const g = setup([['prefeito', 'agiota'], ['delegada', 'fofoqueira'], ['benzedeira', 'agiota'], ['delegada', 'prefeito']], { duplas: true });
+  pl(g, 'p1').cards[0].lost = true;
+  pl(g, 'p3').cards[0].lost = true;
+  pl(g, 'p3').cards[1].lost = true; pl(g, 'p3').out = true;
+  pl(g, 'p0').coins = 7;
+  L.act(g, 'p0', { t: 'acao', a: 'escandalo', target: 'p1' });
+  assert.equal(g.phase, 'end');
+  assert.deepEqual(g.winners.sort(), ['p0', 'p2']);
+});
+
+test('partidas aleatórias com feira, relâmpago e duplas sempre terminam', () => {
+  for (let s = 0; s < 300; s++) {
+    let seed = s + 41;
+    const rnd = (n) => { seed = (seed * 16807) % 2147483647; return seed % n; };
+    const duplas = s % 3 === 0;
+    const n = duplas ? (s % 2 ? 4 : 6) : 2 + (s % 5);
+    const cartas = s % 4 === 1 ? 1 : 2;
+    const g = L.newGame(Array.from({ length: n }, (_, i) => 'j' + i), { rnd, labia: s % 2 ? 4 : 0, eventos: s % 5 === 0, feira: true, cartas, duplas });
+    const acts = ['bico', 'verba', 'cobranca', 'prisao', 'fofoca', 'reza', 'mudanca', 'escandalo', 'labia', 'pechincha', 'confissao'];
+    let steps = 0;
+    while (g.phase !== 'end' && steps++ < 5000) {
+      const id = g.waiting[rnd(g.waiting.length)];
+      const r = rnd(10);
+      try {
+        if (g.phase === 'turn') {
+          const others = g.players.filter((p) => !p.out && p.id !== id);
+          L.act(g, id, { t: 'acao', a: acts[rnd(acts.length)], target: others[rnd(others.length)].id, idx: rnd(cartas) });
+        } else if (g.phase === 'react') {
+          L.act(g, id, { t: r < 2 ? 'duvidar' : r < 4 ? 'bloquear' : 'passar' });
+        } else {
+          L.act(g, id, { t: 'perder', idx: rnd(cartas) });
+        }
+      } catch (e) {
+        if (!(e instanceof L.RuleError)) throw e;
+        if (r < 3) L.timeout(g);
+      }
+      const cards = g.deck.length + g.players.reduce((s2, p) => s2 + p.cards.length, 0);
+      assert.equal(cards, 21, 'baralho com a feira tem 21 cartas');
+    }
+    assert.equal(g.phase, 'end', `partida ${s} não terminou`);
+    assert.ok(g.winners.length === (duplas ? 2 : 1));
+  }
+});
+
 console.log(`Cara de Pau: ${passed} testes de regras passaram`);

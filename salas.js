@@ -48,7 +48,15 @@ function createRooms(G) {
     return free.length ? free[rint(free.length)] : rint(AVATAR_BASE);
   }
 
-  const makePlayer = (name, avatar, bot = false) => ({ id: newId(), name, avatar, bot, wins: 0, res: null, timer: null, lastReact: 0, lastChat: 0 });
+  const makePlayer = (name, avatar, bot = false, pp = null) => ({ id: newId(), name, avatar, bot, pp, wins: 0, res: null, timer: null, lastReact: 0, lastChat: 0 });
+  // id público do Passaporte da Vila (para o ranking entre amigos); nada sensível
+  const validPp = (v) => (typeof v === 'string' && /^[a-z0-9]{8}$/.test(v) ? v : null);
+
+  function addBot(room) {
+    const used = new Set(room.players.map((p) => norm(p.name)));
+    const name = BOT_NAMES.find((n) => !used.has(norm(n))) || `Bot ${room.players.length + 1}`;
+    room.players.push(makePlayer(name, pickAvatar(room), true));
+  }
 
   function makeRoom(host) {
     return { code: newCode(), hostId: host.id, players: [host], phase: 'lobby', settings: { ...G.defaults }, g: null, round: 0,
@@ -61,7 +69,7 @@ function createRooms(G) {
     const v = {
       code: room.code, you: pid, hostId: room.hostId, phase: room.phase, settings: room.settings, options: G.options,
       min: G.min, max: G.max, emojis: EMOJIS, round: room.round,
-      players: room.players.map((p) => ({ id: p.id, name: p.name, avatar: p.avatar, bot: p.bot, wins: p.wins, online: online(p) })),
+      players: room.players.map((p) => ({ id: p.id, name: p.name, avatar: p.avatar, bot: p.bot, wins: p.wins, online: online(p), pp: p.pp })),
       leftMs: room.deadline ? Math.max(0, room.deadline - Date.now()) : 0, totalMs: room.total,
       reactions: room.reactions,
       chat: room.chat.filter((m) => m.ch === 'sala' || (room.phase === 'game' && room.g && G.canSee(room, pid, m.ch))),
@@ -186,9 +194,7 @@ function createRooms(G) {
         if (!isHost) fail('Só quem criou a sala chama bots.');
         if (!lobby) fail('Chame bots no saguão.');
         if (room.players.length >= G.max) fail('Sala cheia.');
-        const used = new Set(room.players.map((p) => norm(p.name)));
-        const name = BOT_NAMES.find((n) => !used.has(norm(n))) || `Bot ${room.players.length + 1}`;
-        room.players.push(makePlayer(name, pickAvatar(room), true));
+        addBot(room);
         if (room.phase !== 'lobby') { room.phase = 'lobby'; room.g = null; }
         return;
       }
@@ -206,11 +212,11 @@ function createRooms(G) {
         if (!lobby) fail('A partida já começou.');
         if (room.players.length < G.min) fail(`Precisa de pelo menos ${G.min} jogadores (dá pra chamar bots).`);
         if (room.players.length > G.max) fail(`No máximo ${G.max} jogadores.`);
+        try { G.start(room); } catch (e) { if (e instanceof G.RuleError) fail(e.message); throw e; }
         room.round += 1;
         room.counted = false;
         room.reactions = [];
         room.chat = room.chat.filter((m) => m.ch === 'sala').slice(-10);
-        G.start(room);
         room.phase = 'game';
         room.armKey = '';
         return;
@@ -314,9 +320,12 @@ function createRooms(G) {
     const body = await readJson(req);
     if (sub === '/create') {
       if (rooms.size >= MAX_ROOMS) fail('Servidor cheio, tente em instantes.');
-      const player = makePlayer(validName(null, body.name), pickAvatar(null, Number(body.avatar)));
+      const player = makePlayer(validName(null, body.name), pickAvatar(null, Number(body.avatar)), false, validPp(body.pp));
       const room = makeRoom(player);
       if (!room.code) fail('Não foi possível criar a sala.');
+      // "Jogar agora com bots": a sala já nasce com bots
+      const bots = Math.min(Math.max(0, Number(body.bots) | 0), G.max - 1);
+      for (let i = 0; i < bots; i++) addBot(room);
       rooms.set(room.code, room);
       return { code: room.code, pid: player.id };
     }
@@ -324,7 +333,7 @@ function createRooms(G) {
       const room = rooms.get(clean(body.code, 4).toUpperCase());
       if (!room) fail('Sala não encontrada. Confira o código.');
       if (room.players.length >= G.max) fail('Sala cheia.');
-      const player = makePlayer(validName(room, body.name), pickAvatar(room, Number(body.avatar)));
+      const player = makePlayer(validName(room, body.name), pickAvatar(room, Number(body.avatar)), false, validPp(body.pp));
       room.players.push(player);   // entrou no meio: assiste e joga a próxima
       broadcast(room);
       return { code: room.code, pid: player.id };

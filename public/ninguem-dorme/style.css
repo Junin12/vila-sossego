@@ -97,3 +97,8 @@
 .award .aemoji { font-size: 1.6rem; }
 .award small { color: var(--muted); font-weight: 700; line-height: 1.2; }
 .award b { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* casal e noites especiais */
+.partners.love .pchip { background: #FFC7DF; }
+.partners.love small { font-weight: 600; opacity: .85; }
+.event.night-ev { background: #FFE9A8; }

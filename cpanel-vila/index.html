@@ -1,8 +1,80 @@
 <!doctype html>
-<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2E3BD6">
+<meta name="description" content="Vila Sossego: jogos de festa para jogar com a turma, cada um no seu celular. Cara de Pau e Ninguém Dorme.">
+<meta property="og:title" content="Vila Sossego · jogos de festa">
+<meta property="og:description" content="Cara de Pau (blefe) e Ninguém Dorme (cidade dorme). Cada um no seu celular, de graça.">
 <title>Vila Sossego</title>
-<meta http-equiv="refresh" content="0; url=https://vila-sossego.onrender.com/">
-<script>location.replace('https://vila-sossego.onrender.com/');</script>
-</head><body style="font-family:sans-serif;text-align:center;padding:40px">
-<p>Abrindo a Vila Sossego… <a href="https://vila-sossego.onrender.com/">toque aqui se não abrir</a>.</p>
-</body></html>
+<style>
+  :root { --ink: #17143F; --sun: #FFD23F; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body { min-height: 100dvh; display: grid; place-items: center; padding: 24px 16px; color: #fff; text-align: center;
+    font: 700 16px/1.45 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    background: radial-gradient(rgba(255,255,255,.16) 1.6px, transparent 1.8px) 0 0 / 24px 24px, linear-gradient(180deg, #3B49F0, #2E3BD6); }
+  main { display: flex; flex-direction: column; align-items: center; gap: 14px; max-width: 420px; }
+  .houses { display: flex; gap: 6px; font-size: 2.6rem; }
+  .houses span { display: inline-block; animation: hop 1.2s ease-in-out infinite; }
+  .houses span:nth-child(2) { animation-delay: .15s; } .houses span:nth-child(3) { animation-delay: .3s; }
+  .houses span:nth-child(4) { animation-delay: .45s; } .houses span:nth-child(5) { animation-delay: .6s; }
+  @keyframes hop { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-14px); } }
+  h1 { margin: 0; font-size: clamp(2.4rem, 12vw, 3.4rem); line-height: 1; transform: rotate(-2deg); text-shadow: 0 5px 0 var(--ink); }
+  .msg { min-height: 3em; margin: 0; font-size: 1.1rem; }
+  .bar { width: min(280px, 80vw); height: 16px; overflow: hidden; border: 3px solid var(--ink); border-radius: 99px; background: #fff; }
+  .bar i { display: block; width: 8%; height: 100%; background: var(--sun); transition: width .6s ease-out; }
+  .tip { margin: 0; font-weight: 600; opacity: .85; font-size: .92rem; }
+  a { color: var(--sun); }
+  @media (prefers-reduced-motion: reduce) { .houses span { animation: none; } }
+</style>
+</head>
+<body>
+<main>
+  <div class="houses" aria-hidden="true"><span>🏠</span><span>🏡</span><span>⛪</span><span>🏪</span><span>🏠</span></div>
+  <h1>Vila Sossego</h1>
+  <p class="msg" id="msg" role="status">Acordando a vila…</p>
+  <div class="bar" aria-hidden="true"><i id="bar"></i></div>
+  <p class="tip" id="tip">Se ninguém jogou nos últimos minutos, o servidor estava cochilando. Leva uns segundinhos. 😴</p>
+  <noscript><a href="https://vila-sossego.onrender.com/">Entrar na Vila Sossego</a></noscript>
+</main>
+<script>
+  // O jogo roda no Render (plano grátis dorme quando ninguém joga). Esta página acorda o servidor e só então entra,
+  // mantendo o caminho e o código da sala: wiapps.com.br/vila/ninguem-dorme/?sala=ABCD → …onrender.com/ninguem-dorme/?sala=ABCD
+  (function () {
+    var BASE = 'https://vila-sossego.onrender.com';
+    var resto = location.pathname.replace(/^.*?\/vila\/?/i, '/');
+    var destino = BASE + (resto || '/') + location.search;
+    var frases = ['Acordando a vila…', 'O galo já cantou… 🐓', 'Abrindo as janelas… 🪟', 'Passando o café… ☕', 'Varrendo a calçada… 🧹', 'Quase lá! 🏃'];
+    var msg = document.getElementById('msg'), bar = document.getElementById('bar');
+    var t0 = Date.now(), i = 0, foi = false;
+    var tick = setInterval(function () {
+      var s = (Date.now() - t0) / 1000;
+      bar.style.width = Math.min(92, 8 + s * 1.6) + '%';
+      if (s > i * 6 + 6 && i < frases.length - 1) msg.textContent = frases[++i];
+      if (s > 75) document.getElementById('tip').innerHTML = 'Está demorando mais que o normal. <a href="' + destino + '">Tentar entrar mesmo assim</a>';
+    }, 400);
+    function entrar() {
+      if (foi) return;
+      foi = true;
+      clearInterval(tick);
+      bar.style.width = '100%';
+      msg.textContent = 'Bem-vindo à vila! 🎉';
+      setTimeout(function () { location.replace(destino); }, 250);
+    }
+    function ping() {
+      if (foi) return;
+      var ctl = window.AbortController ? new AbortController() : null;
+      var to = setTimeout(function () { if (ctl) ctl.abort(); }, 12000);
+      // no-cors: só interessa se o servidor respondeu
+      fetch(BASE + '/healthz?t=' + Date.now(), { mode: 'no-cors', cache: 'no-store', signal: ctl ? ctl.signal : undefined })
+        .then(function () { clearTimeout(to); entrar(); })
+        .catch(function () { clearTimeout(to); setTimeout(ping, 2000); });
+    }
+    if (!window.fetch) { location.replace(destino); return; }
+    ping();
+  })();
+</script>
+</body>
+</html>

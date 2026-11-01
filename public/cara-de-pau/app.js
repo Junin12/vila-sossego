@@ -22,10 +22,12 @@ function cardEl(c, o = {}) {
 function seat(p, g) {
   const s = Vila.state;
   const pp = Vila.P(p.id);
-  const cls = ['seat', g.turn === p.id && g.phase !== 'end' ? 'turn' : '', p.out ? 'out' : '', g.winner === p.id ? 'win' : ''].join(' ');
+  const me = g.players.find((x) => x.id === s.you);
+  const dupla = g.duplas && me && me.team === p.team;
+  const cls = ['seat', g.turn === p.id && g.phase !== 'end' ? 'turn' : '', p.out ? 'out' : '', (g.winners || []).includes(p.id) ? 'win' : '', dupla ? 'mate' : ''].join(' ');
   const thinking = g.waiting.includes(p.id) && g.phase !== 'end';
   return h('div', { class: cls, 'data-key': 's' + p.id },
-    h('div', { class: 'who' }, av(pp.avatar, 34), h('b', {}, pp.name), pp.bot ? h('span', { class: 'bot' }, 'bot') : null),
+    h('div', { class: 'who' }, av(pp.avatar, 34), h('b', {}, pp.name), pp.bot ? h('span', { class: 'bot' }, 'bot') : null, dupla ? h('span', { class: 'bot mate' }, '🤝') : null),
     h('div', { class: 'mini' }, p.cards.map((c, i) => h('span', { 'data-key': 'c' + i }, cardEl(c.c, { small: true, lost: c.lost })))),
     h('div', { class: 'seat-foot' },
       h('span', { class: 'coins' }, `🪙 ${p.coins}`),
@@ -50,7 +52,7 @@ function claimLine(g) {
 }
 
 function actionMenu(g, me) {
-  const others = g.players.filter((p) => !p.out && p.id !== me.id);
+  const others = g.players.filter((p) => !p.out && p.id !== me.id && !(g.duplas && p.team === me.team));
   if (picking) {
     const a = A[picking];
     if (picking === 'mudanca') {
@@ -87,35 +89,35 @@ function actionMenu(g, me) {
     h('p', { class: 'mh' }, 'Qualquer um faz'),
     ['bico', 'mudanca', 'escandalo'].map(item),
     h('p', { class: 'mh' }, 'Diga que você é… (pode ser blefe)'),
-    ['verba', 'cobranca', 'prisao', 'reza', 'fofoca'].map(item));
+    Object.keys(A).filter((k) => A[k].carta && g.moradores.includes(A[k].carta)).map(item));
 }
 
 function statusPanel(g, me) {
   const s = Vila.state;
   const mine = g.waiting.includes(s.you);
   const box = h('section', { class: `panel status${mine ? ' mine' : ''}`, 'data-key': 'status-' + g.phase });
-  box.append(Vila.tmr());
+  put(box, Vila.tmr());
   if (g.phase === 'turn') {
-    if (g.turn === s.you) box.append(h('p', { class: 'big-msg' }, 'Sua vez! O que você vai fazer?'), actionMenu(g, me));
-    else box.append(h('div', { class: 'claim' }, av(Vila.P(g.turn).avatar, 56), h('p', {}, 'Vez de ', h('b', {}, Vila.nameOf(g.turn)), '… o que será que vem aí?')));
+    if (g.turn === s.you) put(box, h('p', { class: 'big-msg' }, 'Sua vez! O que você vai fazer?'), actionMenu(g, me));
+    else put(box, h('div', { class: 'claim' }, av(Vila.P(g.turn).avatar, 56), h('p', {}, 'Vez de ', h('b', {}, Vila.nameOf(g.turn)), '… o que será que vem aí?')));
     return box;
   }
   if (g.phase === 'react') {
-    box.append(claimLine(g));
+    put(box, claimLine(g));
     if (mine) {
-      const blockCard = g.canBlock && Object.keys(M).find((k) => M[k].bloqueia.includes(g.pend.a));
-      box.append(h('div', { class: 'reactbtns' },
+      const blockCard = g.canBlock && g.moradores.find((k) => M[k].bloqueia.includes(g.pend.a));
+      put(box, h('div', { class: 'reactbtns' },
         g.canDoubt ? h('button', { class: 'btn danger big', type: 'button', 'data-act': 'mv', 'data-t': 'duvidar' }, '🤨 Duvido!') : null,
         blockCard ? h('button', { class: 'btn dark', type: 'button', 'data-act': 'mv', 'data-t': 'bloquear' }, `Bloquear com ${cardName(blockCard)}`) : null,
         h('button', { class: 'btn', type: 'button', 'data-act': 'mv', 'data-t': 'passar' }, 'Deixa passar')),
       g.claim.noDoubt ? h('p', { class: 'hint' }, '🕯️ Apagão: ninguém pode duvidar nesta volta.') : null);
     } else {
-      box.append(h('p', { class: 'hint' }, 'Esperando: ', g.waiting.map((id) => Vila.P(id).name).join(', ')));
+      put(box, h('p', { class: 'hint' }, 'Esperando: ', g.waiting.map((id) => Vila.P(id).name).join(', ')));
     }
     return box;
   }
   if (g.phase === 'lose') {
-    box.append(g.loser === s.you ? h('p', { class: 'big-msg' }, '😬 Escolha qual segredo vai perder 👇')
+    put(box, g.loser === s.you ? h('p', { class: 'big-msg' }, '😬 Escolha qual segredo vai perder 👇')
       : h('div', { class: 'claim' }, av(Vila.P(g.loser).avatar, 56), h('p', {}, h('b', {}, Vila.nameOf(g.loser)), ' está escolhendo qual segredo perder…')));
   }
   return box;
@@ -132,6 +134,8 @@ function myArea(g, me) {
       h('span', {}, '🤥 Lábia secreta'),
       h('span', { class: 'dots-l' }, Array.from({ length: g.labiaWin }, (_, i) => h('i', { class: i < me.labia ? 'on' : '' }))),
       h('small', {}, `${Math.min(me.labia, g.labiaWin)}/${g.labiaWin}`)) : null,
+    g.priv.length ? h('div', { class: 'confs' }, g.priv.slice(-3).map((r, i) => h('small', { 'data-key': 'cf' + i },
+      `⛪ Na confissão: ${Vila.nameOf(r.alvo)} tem ${cardName(r.c)}`))) : null,
     me.out ? h('p', { class: 'hint light center' }, 'Você saiu da vila. Assista e reaja! 👀') : null);
 }
 
@@ -149,7 +153,7 @@ function logLine(e) {
     case 'bloqueado': return `${A[e.a].nome} de ${n(e.by)} foi bloqueada.`;
     case 'perdeu': return `💔 ${n(e.by)} perdeu ${cardName(e.card)}`;
     case 'fora': return `🏚️ ${n(e.by)} saiu da vila!`;
-    case 'fim': return `🏆 ${n(e.by)} venceu${e.how === 'labia' ? ' na lábia' : ''}!`;
+    case 'fim': return `🏆 ${e.dupla ? e.dupla.map(n).join(' e ') + ' venceram' : n(e.by) + ' venceu'}${e.how === 'labia' ? ' na lábia' : ''}!`;
     default: return null;
   }
 }
@@ -170,12 +174,15 @@ function awards(g) {
 
 function endScreen(g) {
   const s = Vila.state;
-  const won = g.winner === s.you;
+  const ws = g.winners || [g.winner];
+  const won = ws.includes(s.you);
   const wp = Vila.P(g.winner);
+  const title = won ? (ws.length > 1 ? '🏆 Sua dupla venceu!' : '🏆 Você venceu!') : ws.length > 1 ? `${ws.map((id) => Vila.P(id).name).join(' e ')} venceram!` : `${wp.name} venceu!`;
   return h('div', { class: 'screen', 'data-screen': 'cdp-end' },
-    h('div', { class: `banner ${won ? 'win' : 'lose'}` }, won ? '🏆 Você venceu!' : `${wp.name} venceu!`,
-      h('small', {}, g.how === 'labia' ? 'Na lábia: enganou a vila vezes suficientes 🤥' : 'Último morador que sobrou na vila')),
-    h('div', { class: 'winner' }, av(wp.avatar, 120)),
+    h('div', { class: `banner ${won ? 'win' : 'lose'}` }, title,
+      h('small', {}, g.how === 'labia' ? 'Na lábia: enganou a vila vezes suficientes 🤥' : ws.length > 1 ? 'A última dupla que sobrou na vila' : 'Último morador que sobrou na vila')),
+    h('div', { class: 'winner' }, ws.map((id) => av(Vila.P(id).avatar, ws.length > 1 ? 96 : 120))),
+    Vila.placar(),
     h('section', { class: 'panel' }, h('h2', {}, 'Todos os segredos'),
       g.players.map((p) => h('div', { class: 'reveal-row', 'data-key': 'r' + p.id }, av(Vila.P(p.id).avatar, 40),
         h('div', { class: 'grow' }, h('b', {}, Vila.P(p.id).name), h('small', {}, `🤥 ${p.stats.blefes} blefes · 🔎 ${p.stats.acertos} dúvidas certas`)),
@@ -183,13 +190,16 @@ function endScreen(g) {
     awards(g).length ? h('div', { class: 'awards' }, awards(g).map(([e, t, id, sub]) => h('div', { class: 'award' },
       h('span', { class: 'aemoji' }, e), h('small', {}, t), av(Vila.P(id).avatar, 44), h('b', {}, Vila.P(id).name), h('small', {}, sub)))) : null,
     Vila.resultPanel(),
+    Vila.shareButton(),
     Vila.endButtons(),
     Vila.reactBar(),
     Vila.chatPanel({ title: 'Resenha', cls: 'flat' }));
 }
 
+const FRASES = ['Duvido! 🤨', 'Pode confiar 😇', 'Tô de olho 👀', 'Sorte de principiante 🍀', 'Que cara de pau! 😂', 'Vou me vingar 😤'];
+
 const Jogo = {
-  id: 'cdp', slug: 'cara-de-pau', nome: 'Cara de Pau', emoji: '🤥',
+  id: 'cdp', slug: 'cara-de-pau', nome: 'Cara de Pau', emoji: '🤥', bots: 3,
   sub: 'Todo mundo na vila esconde dois segredos. Minta com cara de pau, ou grite "Duvido!" e desmascare os outros.',
   jogadores: 'De 2 a 6 jogadores, cada um no seu celular. Sem turma? Jogue contra bots.',
   outro: { href: '../ninguem-dorme/', nome: 'Ninguém Dorme', emoji: '🌙' },
@@ -198,6 +208,12 @@ const Jogo = {
       hint: (v) => (v ? `Quem passar ${v} blefes sem ser pego pode declarar vitória.` : 'Só vence o último que sobrar.') },
     { key: 'eventos', label: 'Eventos da Vila', fmt: (v) => (v ? 'Ligados' : 'Desligados'),
       hint: (v) => (v ? 'A cada volta, um evento muda as regras (feira, apagão, blitz…).' : 'Regras fixas a partida toda.') },
+    { key: 'feira', label: 'Expansão Feira', fmt: (v) => (v ? 'Ligada' : 'Clássico'),
+      hint: (v) => (v ? 'Entram a Feirante 🍉 (Pechincha) e o Padre ⛪ (Confissão, bloqueia a Prisão).' : 'Só os 5 moradores básicos.') },
+    { key: 'cartas', label: 'Modo', fmt: (v) => (v === 1 ? '⚡ Relâmpago' : 'Normal'),
+      hint: (v) => (v === 1 ? 'Um segredo só e 3 moedas: partida de uns 3 minutos.' : 'Dois segredos por jogador.') },
+    { key: 'duplas', label: 'Duplas', fmt: (v) => (v ? '🤝 Ligado' : 'Cada um por si'),
+      hint: (v) => (v ? 'Com 4 ou 6: quem senta em frente é sua dupla. Vocês veem os segredos um do outro, não se atacam e vencem juntos.' : 'Todo mundo contra todo mundo.') },
     { key: 'reactSecs', label: 'Tempo para duvidar', fmt: (v) => `${v}s` },
   ],
   over: (s) => !!(s.game && s.game.phase === 'end'),
@@ -210,7 +226,11 @@ const Jogo = {
       h('h3', {}, '🤨 Duvido!'),
       h('p', {}, 'Qualquer um pode duvidar. Se era blefe, quem mentiu perde um segredo e a ação não vale. Se era verdade, quem duvidou perde um segredo, e a carta mostrada volta para o baralho em troca de outra.'),
       h('h3', {}, '🛡️ Bloquear'),
-      h('p', {}, 'A Delegada bloqueia a Cobrança e a Vó Zefa bloqueia a Fofoca. Bloqueio também pode ser blefe e também leva "Duvido!".'),
+      h('p', {}, 'A Delegada bloqueia a Cobrança, a Vó Zefa bloqueia a Fofoca e, com a Feira, o Padre bloqueia a Prisão. Bloqueio também pode ser blefe e também leva "Duvido!".'),
+      h('h3', {}, '🍉 Expansão Feira'),
+      h('p', {}, 'Entram dois moradores: Dona Neide, a Feirante (Pechincha: pega 1 moeda de cada jogador mais rico que você, até 3) e o Padre Quinzinho (Confissão: paga 1 e espia um segredo do alvo).'),
+      h('h3', {}, '⚡ Relâmpago e 🤝 Duplas'),
+      h('p', {}, 'No Relâmpago cada um tem um segredo só e começa com 3 moedas. Nas Duplas (4 ou 6 jogadores), quem senta em frente é seu parceiro: um vê os segredos do outro, ninguém ataca a própria dupla e a última dupla de pé vence junta.'),
       h('h3', {}, '🤥 Lábia secreta'),
       h('p', {}, 'Cada blefe que passa sem ninguém duvidar enche sua lábia (só você vê). Encheu, você pode declarar vitória na sua vez. Se te pegarem mentindo, zera. Então duvide de vez em quando!'),
       h('h3', {}, '🎪 Eventos da Vila'),
@@ -234,7 +254,7 @@ const Jogo = {
       me ? myArea(g, me) : h('p', { class: 'lead center' }, 'Você está assistindo. Entra na próxima partida! 🍿'),
       Vila.reactBar(),
       h('section', { class: 'panel flat log' }, h('h2', {}, 'O que rolou'), h('ol', {}, lines.map(([n, t]) => h('li', { 'data-key': 'l' + n }, t)))),
-      Vila.chatPanel({ title: 'Papo', cls: 'flat' }));
+      Vila.chatPanel({ title: 'Papo', cls: 'flat', frases: FRASES, alvos: g.players.filter((p) => !p.out && p.id !== s.you).map((p) => p.id), acusa: 'Duvido de' }));
   },
   onState(prev, s) {
     const g = s.game;
@@ -257,9 +277,10 @@ const Jogo = {
       } else if (e.t === 'fora') {
         Snd.lose();
       } else if (e.t === 'fim') {
-        if (e.by === s.you) { Snd.fanfare(); Vila.confetti(); } else Snd.lose();
-        Vila.flash({ emoji: e.how === 'labia' ? '🤥' : '🏆', title: e.by === s.you ? 'Você venceu!' : `${n(e.by)} venceu!`,
-          text: e.how === 'labia' ? 'Ganhou na lábia, com a maior cara de pau!' : 'Último morador de pé.', cls: e.by === s.you ? 'good' : 'sun', ms: 3000 });
+        const ganhei = (e.dupla || [e.by]).includes(s.you);
+        if (ganhei) { Snd.fanfare(); Vila.confetti(); } else Snd.lose();
+        Vila.flash({ emoji: e.how === 'labia' ? '🤥' : '🏆', title: ganhei ? (e.dupla ? 'Sua dupla venceu!' : 'Você venceu!') : e.dupla ? `${e.dupla.map(n).join(' e ')} venceram!` : `${n(e.by)} venceu!`,
+          text: e.how === 'labia' ? 'Ganhou na lábia, com a maior cara de pau!' : 'Último morador de pé.', cls: ganhei ? 'good' : 'sun', ms: 3000 });
       }
     }
     const pg = prev.game;
@@ -273,8 +294,18 @@ const Jogo = {
     if (!g || g.phase !== 'end') return null;
     const me = g.players.find((p) => p.id === s.you);
     if (!me) return null;
-    const won = g.winner === s.you;
-    return { jogo: 'cdp', won, blefes: me.stats.blefes, duvidasCertas: me.stats.acertos, labiaWin: won && g.how === 'labia' };
+    const won = (g.winners || [g.winner]).includes(s.you);
+    return { jogo: 'cdp', won, blefes: me.stats.blefes, duvidasCertas: me.stats.acertos, labiaWin: won && g.how === 'labia' && g.winner === s.you };
+  },
+  shareText(s) {
+    const g = s.game;
+    const me = g.players.find((p) => p.id === s.you);
+    if (!me) return 'Joguei Cara de Pau na Vila Sossego! 🤥';
+    const won = (g.winners || [g.winner]).includes(s.you);
+    if (won && g.how === 'labia') return `Venci o Cara de Pau NA LÁBIA, com ${me.stats.blefes} blefes que ninguém pegou 🤥😎`;
+    if (won) return `Fui o último de pé no Cara de Pau! ${me.stats.blefes} blefes e ${me.stats.acertos} "Duvido!" certeiros 🏆`;
+    if (me.stats.acertos >= 2) return `Peguei ${me.stats.acertos} mentirosos no Cara de Pau 🔎 Ninguém me engana!`;
+    return `Perdi no Cara de Pau… mas passei ${me.stats.blefes} blefe(s) na cara dura 🤥`;
   },
 };
 

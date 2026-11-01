@@ -2,7 +2,7 @@
 // Passaporte da Vila: nível, XP, conquistas, personagens exclusivos e desafio do dia, somando os dois jogos.
 // Lógica pura (sem DOM) para ser testável no Node. Fica no aparelho (localStorage): é diversão, não segurança.
 const Perfil = (() => {
-  const XP = { partida: 20, vitoria: 30, blefe: 3, duvidaCerta: 5, labia: 25, votoCerto: 6, sobreviveu: 10, capanga: 15, diario: 60 };
+  const XP = { partida: 20, vitoria: 30, blefe: 3, duvidaCerta: 5, labia: 25, votoCerto: 6, sobreviveu: 10, capanga: 15, diario: 60, temporada: 250 };
   const TITLES = [[1, 'Forasteiro'], [3, 'Vizinho novo'], [5, 'Morador antigo'], [8, 'Fofoqueiro de plantão'],
     [12, 'Figura da Vila'], [16, 'Lenda de Sossego'], [20, 'Dono da Vila']];
   const needFor = (lvl) => 100 + (lvl - 1) * 50;
@@ -15,6 +15,7 @@ const Perfil = (() => {
 
   const blank = () => ({
     v: 1, xp: 0, partidas: 0, vitorias: 0, streak: 0, bestStreak: 0, days: 0, lastDay: '', dailyDone: 0, ach: {}, daily: null,
+    temp: null, temporadas: {},
     cdp: { partidas: 0, vitorias: 0, blefes: 0, duvidasCertas: 0, labia: 0 },
     nd: { partidas: 0, vitorias: 0, vitCapanga: 0, vitVila: 0, sobreviveu: 0, votosCertos: 0, delegadaAcertos: 0 },
   });
@@ -36,6 +37,7 @@ const Perfil = (() => {
     ['lv10', '🌟', 'Nível 10', 'Chegue ao nível 10', (p) => levelInfo(p.xp).level >= 10],
     ['daily5', '📅', 'Batendo ponto', 'Complete 5 desafios do dia', (p) => p.dailyDone >= 5],
     ['os2', '🎪', 'Turista completo', 'Jogue os dois jogos da vila', (p) => p.cdp.partidas >= 1 && p.nd.partidas >= 1],
+    ['temp1', '🏅', 'Campeão da temporada', 'Complete todas as metas de uma temporada', (p) => Object.keys(p.temporadas || {}).length >= 1],
   ].map((a) => ({ id: a[0], emoji: a[1], name: a[2], desc: a[3], test: a[4] }));
 
   // Personagens 12..19 (ver AVATARS em avatars.js)
@@ -62,6 +64,33 @@ const Perfil = (() => {
     { id: 'vivo1', text: 'Chegue vivo ao fim do Ninguém Dorme', goal: 1, on: (e) => (e.jogo === 'nd' && e.survived ? 1 : 0) },
   ];
 
+  // Temporada do mês: tema + 3 metas sorteadas pelo mês (iguais para todo mundo). Completar dá XP e um selo.
+  const TEMAS = {
+    '01': ['Verão na Vila', '🏖️'], '02': ['Carnaval na Vila', '🎭'], '03': ['Outono na Vila', '🍂'], '04': ['Páscoa na Vila', '🐣'],
+    '05': ['Mês das Flores', '💐'], '06': ['Arraiá da Vila', '🔥'], '07': ['Férias de Julho', '🪁'], '08': ['Mês do Folclore', '🌽'],
+    '09': ['Primavera na Vila', '🌼'], '10': ['Mês das Crianças', '🧸'], '11': ['Novembro dos Mistérios', '🕵️'], '12': ['Natal na Vila', '🎄'],
+  };
+  const METAS = [
+    { id: 'jogar', text: 'Jogue 15 partidas', goal: 15, on: () => 1 },
+    { id: 'vencer', text: 'Vença 6 partidas', goal: 6, on: (e) => (e.won ? 1 : 0) },
+    { id: 'blefes', text: 'Passe 15 blefes no Cara de Pau', goal: 15, on: (e) => e.blefes || 0 },
+    { id: 'duvidas', text: 'Pegue 8 blefes no Cara de Pau', goal: 8, on: (e) => e.duvidasCertas || 0 },
+    { id: 'vila', text: 'Vença 4 vezes com a vila no Ninguém Dorme', goal: 4, on: (e) => (e.jogo === 'nd' && e.won && e.team !== 'capangas' ? 1 : 0) },
+    { id: 'capanga', text: 'Vença 2 vezes como capanga', goal: 2, on: (e) => (e.jogo === 'nd' && e.won && e.team === 'capangas' ? 1 : 0) },
+    { id: 'votos', text: 'Vote certo num capanga 8 vezes', goal: 8, on: (e) => e.votosCertos || 0 },
+    { id: 'nd', text: 'Jogue 6 partidas de Ninguém Dorme', goal: 6, on: (e) => (e.jogo === 'nd' ? 1 : 0) },
+    { id: 'cdp', text: 'Jogue 6 partidas de Cara de Pau', goal: 6, on: (e) => (e.jogo === 'cdp' ? 1 : 0) },
+  ];
+  const hash = (key) => { let n = 7; for (const ch of key) n = (n * 31 + ch.charCodeAt(0)) >>> 0; return n; };
+  function temporada(mes) {
+    const [nome, emoji] = TEMAS[mes.slice(5, 7)] || ['Temporada', '⭐'];
+    const pool = METAS.slice();
+    const metas = [];
+    let n = hash(mes);
+    for (let i = 0; i < 3; i++) { metas.push(pool.splice(n % pool.length, 1)[0]); n = Math.floor(n / 7) + 13; }
+    return { id: mes, nome, emoji, metas };
+  }
+
   const dayKey = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   const dailyFor = (key) => {
     let n = 0;
@@ -77,6 +106,8 @@ const Perfil = (() => {
     p.nd = Object.assign(b.nd, p.nd);
     if (p.lastDay !== today) { p.days++; p.lastDay = today; }
     if (!p.daily || p.daily.day !== today) p.daily = { day: today, id: dailyFor(today).id, prog: 0, done: false };
+    const mes = today.slice(0, 7);
+    if (!p.temp || p.temp.id !== mes) p.temp = { id: mes, prog: [0, 0, 0], done: false };
     return p;
   }
 
@@ -114,7 +145,16 @@ const Perfil = (() => {
       p.daily.prog += def.on(e);
       if (p.daily.prog >= def.goal) { p.daily.done = true; p.dailyDone++; p.xp += XP.diario; gain += XP.diario; dailyDone = true; }
     }
-    const out = { xp: gain, levelUp: null, ach: [], avatars: [], dailyDone };
+    // temporada do mês
+    let seasonDone = null;
+    if (!p.temp.done) {
+      const t = temporada(p.temp.id);
+      t.metas.forEach((m, i) => { p.temp.prog[i] = Math.min(m.goal, p.temp.prog[i] + m.on(e)); });
+      if (t.metas.every((m, i) => p.temp.prog[i] >= m.goal)) {
+        p.temp.done = true; p.temporadas[t.id] = t.nome; p.xp += XP.temporada; gain += XP.temporada; seasonDone = t;
+      }
+    }
+    const out = { xp: gain, levelUp: null, ach: [], avatars: [], dailyDone, seasonDone };
     for (const a of ACH) if (!p.ach[a.id] && a.test(p)) { p.ach[a.id] = today; out.ach.push(a); }
     const lvBefore = levelInfo(before.xp).level, lvAfter = levelInfo(p.xp).level;
     if (lvAfter > lvBefore) out.levelUp = lvAfter;
@@ -124,6 +164,6 @@ const Perfil = (() => {
 
   const unlocked = (p, i) => i < 12 || UNLOCKS.some((u) => u.i === i && u.test(p));
 
-  return { blank, touch, onGame, levelInfo, dailyFor, dayKey, unlocked, ACH, UNLOCKS, DAILY, XP, TITLES };
+  return { blank, touch, onGame, levelInfo, dailyFor, dayKey, unlocked, temporada, ACH, UNLOCKS, DAILY, METAS, XP, TITLES };
 })();
 if (typeof module !== 'undefined') module.exports = Perfil;

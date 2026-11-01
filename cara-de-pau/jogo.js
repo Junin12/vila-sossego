@@ -9,11 +9,11 @@ const rnd = (n) => crypto.randomInt(n);
 const chance = (pct) => rnd(100) < pct;
 const pickOne = (arr) => arr[rnd(arr.length)];
 
-const OPTIONS = { labia: [0, 3, 4, 5], reactSecs: [8, 12, 20], eventos: [0, 1] };
-const DEFAULTS = { labia: 4, reactSecs: 12, eventos: 1 };
+const OPTIONS = { labia: [0, 3, 4, 5], reactSecs: [8, 12, 20], eventos: [0, 1], feira: [0, 1], cartas: [2, 1], duplas: [0, 1] };
+const DEFAULTS = { labia: 4, reactSecs: 12, eventos: 1, feira: 1, cartas: 2, duplas: 0 };
 const TURN_SECS = 45;
 const LOSE_SECS = 20;
-const VALUE = { fofoqueira: 5, prefeito: 4, benzedeira: 3, delegada: 3, agiota: 2 };   // o que o bot prefere guardar
+const VALUE = { fofoqueira: 5, prefeito: 4, feirante: 3, benzedeira: 3, delegada: 3, padre: 2, agiota: 2 };   // o que o bot prefere guardar
 
 const P = (g, id) => g.players.find((p) => p.id === id);
 
@@ -25,9 +25,10 @@ function seen(g) {
 }
 
 function botTurn(g, p) {
-  const others = g.players.filter((x) => !x.out && x.id !== p.id);
+  const others = g.players.filter((x) => !x.out && x.id !== p.id && !L.parceiros(g, p, x));
   const mine = new Set(L.alive(p).map((x) => x.c));
-  const can = (a) => p.coins >= L.custo(g, a);
+  const can = (a) => (!ACOES[a].carta || g.moradores.includes(ACOES[a].carta)) && p.coins >= L.custo(g, a);
+  const ricos = others.filter((x) => x.coins > p.coins).length;
   const threat = (x) => L.alive(x).length * 10 + x.coins;
   const strongest = others.slice().sort((a, b) => threat(b) - threat(a))[0];
   const target = () => (chance(65) ? strongest : pickOne(others));
@@ -45,13 +46,16 @@ function botTurn(g, p) {
   if (mine.has('prefeito')) opts.push([6, { t: 'acao', a: 'verba' }]);
   if (mine.has('agiota') && richest.coins >= 2) opts.push([6, move('cobranca', richest)]);
   if (mine.has('delegada') && can('prisao') && chance(35)) opts.push([5, move('prisao', target())]);
+  if (mine.has('feirante') && ricos >= 2) opts.push([7, { t: 'acao', a: 'pechincha' }]);
+  if (mine.has('padre') && can('confissao') && chance(30)) opts.push([4, move('confissao', target())]);
   // blefe: mais ousado quando a lábia vale vitória; evita mentir sobre carta que já está quase toda à vista
   if (chance(g.labiaWin ? 38 : 25)) {
-    const lies = ['verba', 'cobranca', 'fofoca'].filter((a) => can(a) && !mine.has(ACOES[a].carta) && (known[ACOES[a].carta] || 0) < COPIAS - 1);
+    const lies = ['verba', 'cobranca', 'fofoca', 'pechincha'].filter((a) => can(a) && !mine.has(ACOES[a].carta) && (known[ACOES[a].carta] || 0) < COPIAS - 1);
     const a = lies.length ? pickOne(lies) : null;
     if (a === 'cobranca' && richest.coins > 0) opts.push([7, move('cobranca', richest)]);
     else if (a === 'fofoca') opts.push([7, move('fofoca', target())]);
     else if (a === 'verba') opts.push([7, { t: 'acao', a: 'verba' }]);
+    else if (a === 'pechincha' && ricos >= 2) opts.push([7, { t: 'acao', a: 'pechincha' }]);
   }
   if (!opts.length) {
     if (can('mudanca') && chance(15)) {
@@ -70,7 +74,9 @@ function botReact(g, p) {
   const mineSame = L.alive(p).filter((x) => x.c === c.card).length;
   const impossible = (seen(g)[c.card] || 0) + mineSame >= COPIAS;
   const doubtOk = !c.verified && !c.noDoubt;
-  const blocker = c.kind === 'acao' && g.pend.target === p.id ? L.blockerOf(g.pend.a) : null;
+  const blocker = c.kind === 'acao' && g.pend.target === p.id ? L.blockerOf(g.pend.a, g) : null;
+  const claimant = g.players.find((x) => x.id === c.by);
+  if (claimant && L.parceiros(g, p, claimant)) return { t: 'passar' };   // não duvida da própria dupla
   if (doubtOk && impossible) return { t: 'duvidar' };
   if (blocker) {
     if (L.alive(p).some((x) => x.c === blocker)) return { t: 'bloquear' };
@@ -101,7 +107,7 @@ module.exports = {
   id: 'cara-de-pau', min: 2, max: 6, options: OPTIONS, defaults: DEFAULTS, RuleError: L.RuleError,
   start(room) {
     const s = room.settings;
-    room.g = L.newGame(room.players.map((p) => p.id), { labia: s.labia, eventos: !!s.eventos, rnd });
+    room.g = L.newGame(room.players.map((p) => p.id), { labia: s.labia, eventos: !!s.eventos, feira: !!s.feira, cartas: s.cartas, duplas: !!s.duplas, rnd });
   },
   move(room, pid, m) { L.act(room.g, pid, m); },
   view(room, pid) { return L.viewFor(room.g, pid); },
@@ -113,7 +119,7 @@ module.exports = {
     return { key: `${room.round}|${g.phase}|${g.seq}`, ids: g.waiting.slice(), secs };
   },
   timeout(room) { L.timeout(room.g); },
-  winners(room) { return room.g && room.g.phase === 'end' ? [room.g.winner] : null; },
+  winners(room) { return room.g && room.g.phase === 'end' ? room.g.winners : null; },
   chat() { return 'sala'; },
   canSee() { return true; },
   bot(room, id) {

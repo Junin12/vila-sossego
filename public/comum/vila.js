@@ -24,6 +24,12 @@ function h(tag, props, ...kids) {
   return el;
 }
 
+// append que ignora null/false (o append do DOM escreveria "null" na tela)
+function put(el, ...kids) {
+  el.append(...kids.flat(Infinity).filter((k) => k != null && k !== false));
+  return el;
+}
+
 // SVGs vêm de constantes de avatars.js; só o índice (validado) vem do servidor.
 function av(i, size) {
   const a = AVATARS[i] || AVATARS[0];
@@ -92,6 +98,9 @@ const Voz = (() => {
   };
 })();
 
+// endereço que vai nos convites de resultado (wiapps.com.br/vila mostra "acordando a vila" e cai no servidor)
+const SITE = 'https://wiapps.com.br/vila/';
+
 // ---------- base ----------
 const Vila = (() => {
   const $view = document.getElementById('view');
@@ -108,6 +117,8 @@ const Vila = (() => {
   let lastResult = null;
   let prof = null;
   let myAvatar = 0;
+  let quickStart = false;   // "Jogar agora com bots": começa sozinho assim que a sala abrir
+  let showTransfer = false;
 
   // ---------- passaporte ----------
   function loadProf() {
@@ -117,6 +128,31 @@ const Vila = (() => {
     if (!Number.isInteger(myAvatar) || !Perfil.unlocked(prof, myAvatar)) myAvatar = 0;
   }
   const saveProf = () => ls.set('vila-perfil', JSON.stringify(prof));
+  // id público do passaporte (vai junto para a sala; base para o ranking entre amigos)
+  function passId() {
+    let id = ls.get('vila-pp');
+    if (!/^[a-z0-9]{8}$/.test(id || '')) { id = Array.from(crypto.getRandomValues(new Uint8Array(8)), (b) => 'abcdefghijkmnpqrstuvwxyz23456789'[b % 32]).join(''); ls.set('vila-pp', id); }
+    return id;
+  }
+
+  // Levar o passaporte para outro celular: um código de texto com tudo (sem servidor).
+  const PREFIXO = 'VILA1-';
+  function exportCode() {
+    const data = { p: prof, n: ls.get('vila-nome') || '', a: myAvatar, pp: passId() };
+    return PREFIXO + btoa(unescape(encodeURIComponent(JSON.stringify(data))));
+  }
+  function importCode(code) {
+    const raw = String(code || '').replace(/\s+/g, '');
+    if (!raw.startsWith(PREFIXO)) throw new Error('Esse código não é de um passaporte da Vila.');
+    let data;
+    try { data = JSON.parse(decodeURIComponent(escape(atob(raw.slice(PREFIXO.length))))); } catch { throw new Error('Código incompleto. Copie ele inteiro.'); }
+    if (!data || typeof data.p !== 'object' || typeof data.p.xp !== 'number') throw new Error('Código inválido.');
+    prof = Perfil.touch(Object.assign(Perfil.blank(), data.p));
+    saveProf();
+    if (data.n) ls.set('vila-nome', String(data.n).slice(0, 14));
+    if (Number.isInteger(data.a) && Perfil.unlocked(prof, data.a)) { myAvatar = data.a; ls.set('vila-avatar', data.a); }
+    if (/^[a-z0-9]{8}$/.test(data.pp || '')) ls.set('vila-pp', data.pp);
+  }
 
   // ---------- rede ----------
   async function api(path, body) {
@@ -174,14 +210,24 @@ const Vila = (() => {
       }
       chatSeen = state.chat.length ? state.chat[state.chat.length - 1].n : chatSeen || 1;
       record();
+      if (quickStart && state.phase === 'lobby' && state.hostId === state.you) { quickStart = false; act('start'); }
       try { J.onState(prev, state); } catch (err) { console.error(err); }
       render();
     };
+    // Sala que sumiu (servidor reiniciou/dormiu): o EventSource leva 404 e desiste sem tentar de novo.
+    // Pergunta ao servidor se a sala existe; se não, volta ao início; se sim e a conexão fechou, reconecta.
     es.onerror = () => {
       $conn.hidden = false;
-      if (++errors === 2) {
-        api('act', { code: session.code, pid: session.pid, type: 'ping' }).catch((e) => { if (e.status === 404) leaveRoom('Essa sala não existe mais.'); });
-      }
+      errors += 1;
+      const closed = es.readyState === 2;
+      if (errors !== 1 && !closed && errors % 5) return;
+      const cur = es;
+      api('act', { code: session.code, pid: session.pid, type: 'ping' })
+        .then(() => { if (closed && es === cur) setTimeout(() => { if (es === cur && session) connect(); }, 2000); })
+        .catch((e) => {
+          if (e.status === 404) leaveRoom(state ? 'Essa sala não existe mais.' : null);
+          else if (closed && es === cur) setTimeout(() => { if (es === cur && session) connect(); }, 3000);
+        });
     };
   }
 
@@ -197,6 +243,11 @@ const Vila = (() => {
     saveProf();
     setTimeout(() => {
       toast(`+${lastResult.xp} XP` + (lastResult.levelUp ? ` · Nível ${lastResult.levelUp}!` : '') + (lastResult.avatars.length ? ' · Personagem novo!' : ''), true);
+      if (lastResult.seasonDone) {
+        const t = lastResult.seasonDone;
+        Snd.fanfare(); confetti();
+        flash({ emoji: t.emoji, title: 'Temporada completa!', text: `Você é campeão(ã) de ${t.nome}! +${Perfil.XP.temporada} XP`, cls: 'sun', ms: 3600 });
+      }
     }, 2600);
   }
 
@@ -239,6 +290,16 @@ const Vila = (() => {
   }
 
   const CH = { capangas: '🦹 só capangas', fantasmas: '👻 fantasmas' };
+  // Frases prontas: um toque e a frase vai pro chat (digitar no meio da discussão é lento).
+  // opts.alvos: ids para os botões de acusação ("🫵 Foi o Tião!").
+  function quickChips(opts) {
+    if (!opts.frases || state.chatCh !== 'sala') return null;
+    return h('div', { class: 'quick', 'data-key': 'quick' },
+      (opts.alvos || []).slice(0, 8).map((id) => h('button', { class: 'qchip acc', type: 'button', 'data-act': 'frase',
+        'data-t': `${opts.acusa || 'Foi'} ${P(id).name}! 🫵`, 'data-key': 'q' + id }, `🫵 ${P(id).name}`)),
+      opts.frases.map((f, i) => h('button', { class: 'qchip', type: 'button', 'data-act': 'frase', 'data-t': f, 'data-key': 'f' + i }, f)));
+  }
+
   function chatPanel(opts = {}) {
     const ch = state.chatCh;
     const msgs = state.chat.slice(-(opts.max || 40));
@@ -249,6 +310,7 @@ const Vila = (() => {
         msgs.map((m) => h('div', { class: `msg${m.ch !== 'sala' ? ' ch-' + m.ch : ''}`, 'data-key': 'm' + m.n },
           av(P(m.pid).avatar, 26),
           h('p', {}, h('b', {}, P(m.pid).name), CH[m.ch] ? h('small', { class: 'chtag' }, CH[m.ch]) : null, ' ', m.text)))),
+      quickChips(opts),
       ch ? h('form', { class: 'form-row', 'data-form': 'chat' },
         h('input', { name: 'msg', maxlength: 120, autocomplete: 'off', placeholder, 'aria-label': 'Mensagem' }),
         h('button', { class: 'btn', type: 'submit', 'aria-label': 'Enviar' }, icon('send')))
@@ -290,9 +352,30 @@ const Vila = (() => {
       h('p', { class: 'xpgain' }, `+${r.xp} XP`),
       r.levelUp ? h('span', { class: 'lvup' }, `Subiu para o nível ${r.levelUp}! ${Perfil.levelInfo(prof.xp).title}`) : null,
       r.dailyDone ? h('span', { class: 'lvup' }, '📅 Desafio do dia completo!') : null,
+      r.seasonDone ? h('span', { class: 'lvup' }, `${r.seasonDone.emoji} Temporada ${r.seasonDone.nome} completa!`) : null,
       r.ach.map((a) => h('span', { class: 'fact ok' }, `${a.emoji} ${a.name}`)),
       r.avatars.length ? h('div', { class: 'unl' }, h('small', {}, 'Personagem liberado!'), r.avatars.map((i) => av(i, 64))) : null,
       xpBar());
+  }
+
+  // Placar da noite: vitórias de cada um desde que a sala abriu (soma a cada revanche).
+  function placar() {
+    if (!state || !state.round) return null;
+    const rows = state.players.slice().sort((a, b) => b.wins - a.wins);
+    const top = rows[0] && rows[0].wins;
+    return h('section', { class: 'panel placar', 'data-key': 'placar' },
+      h('h2', {}, `🏆 Placar da noite`, h('small', {}, ` · ${state.round} partida${state.round > 1 ? 's' : ''}`)),
+      h('ol', {}, rows.map((p, i) => h('li', { class: `${p.wins && p.wins === top ? 'topo' : ''}${p.id === state.you ? ' me' : ''}`, 'data-key': 'pl' + p.id },
+        h('span', { class: 'pos' }, p.wins && p.wins === top ? '👑' : `${i + 1}º`), av(p.avatar, 32), h('b', {}, p.id === state.you ? 'Você' : p.name),
+        h('span', { class: 'wins' }, `${p.wins} 🏆`)))),
+      top && rows.filter((p) => p.wins === top).length === 1
+        ? h('p', { class: 'hint center' }, `${rows[0].id === state.you ? 'Você lidera' : rows[0].name + ' lidera'} a noite! Revanche?`) : null);
+  }
+
+  // Contar o resultado pra turma (WhatsApp / compartilhar do celular).
+  function shareButton() {
+    if (!J.shareText) return null;
+    return h('button', { class: 'btn wa', type: 'button', 'data-act': 'shareResult', 'data-key': 'shareres' }, '📣 Contar pra turma');
   }
 
   function endButtons() {
@@ -340,6 +423,17 @@ const Vila = (() => {
       d.done ? h('span', { class: 'okmark' }, icon('check')) : h('span', { class: 'prog' }, `${Math.min(d.prog, def.goal)}/${def.goal}`));
   }
 
+  function seasonCard(full) {
+    const t = Perfil.temporada(prof.temp.id);
+    const done = prof.temp.done;
+    return h('section', { class: `panel season${done ? ' done' : ''}`, 'data-key': 'season' },
+      h('div', { class: 'season-head' }, h('span', { class: 'se' }, t.emoji),
+        h('div', {}, h('small', {}, `Temporada do mês · +${Perfil.XP.temporada} XP`), h('b', {}, t.nome))),
+      done ? h('p', { class: 'fact ok center' }, '🏅 Temporada completa! Volte no mês que vem.')
+        : t.metas.map((m, i) => h('div', { class: 'meta' }, h('div', { class: 'xpline' }, h('span', {}, m.text), h('small', {}, `${prof.temp.prog[i]}/${m.goal}`)),
+          full !== false ? h('span', { class: 'bar' }, h('i', { style: `--w:${Math.round((prof.temp.prog[i] / m.goal) * 100)}%` })) : null)));
+  }
+
   function homeScreen() {
     const nameIn = h('input', { id: 'nome', maxlength: 14, autocomplete: 'nickname', placeholder: 'Como te chamam na vila?' });
     nameIn.value = ls.get('vila-nome') || '';
@@ -355,9 +449,11 @@ const Vila = (() => {
         h('h2', {}, 'Seu personagem'),
         avatarGrid('homeAvatar', myAvatar, new Set()),
         h('div', {}, h('label', { for: 'nome' }, 'Seu nome'), nameIn)),
-      dailyCard(),
       h('button', { class: 'btn primary big', type: 'button', 'data-act': 'create' }, 'Criar sala'),
       h('form', { class: 'form-row', 'data-form': 'join' }, codeIn, h('button', { class: 'btn', type: 'submit' }, 'Entrar')),
+      h('button', { class: 'btn good', type: 'button', 'data-act': 'quick' }, '🤖 Jogar agora com bots'),
+      dailyCard(),
+      seasonCard(false),
       h('button', { class: 'btn ghost', type: 'button', 'data-act': 'rules' }, 'Como jogar'),
       h('p', { class: 'hint light center' }, J.jogadores),
       J.outro ? h('a', { class: 'other', href: J.outro.href }, h('span', { class: 'oe' }, J.outro.emoji),
@@ -371,6 +467,9 @@ const Vila = (() => {
       h('button', { class: 'btn back', type: 'button', 'data-act': 'home' }, icon('back'), 'Voltar'),
       h('section', { class: 'panel prof-head' }, av(myAvatar, 96), h('h2', {}, ls.get('vila-nome') || 'Morador sem nome'),
         h('span', { class: 'title-tag' }, li.title), xpBar()),
+      seasonCard(),
+      Object.keys(prof.temporadas || {}).length ? h('section', { class: 'panel' }, h('h2', {}, 'Selos de temporada'),
+        h('div', { class: 'facts' }, Object.entries(prof.temporadas).map(([id, nome]) => h('span', { class: 'fact ok' }, `${Perfil.temporada(id).emoji} ${nome}`)))) : null,
       h('h2', {}, 'Passaporte da Vila'),
       h('div', { class: 'stats' }, stat(prof.partidas, 'partidas'), stat(prof.vitorias, 'vitórias'), stat(prof.bestStreak, 'melhor sequência')),
       h('h2', {}, '🤥 Cara de Pau'),
@@ -382,7 +481,20 @@ const Vila = (() => {
           h('span', { class: 'achic' }, a.emoji), h('div', {}, h('b', {}, a.name), h('small', {}, a.desc)))))),
       h('section', { class: 'panel' }, h('h2', {}, 'Personagens exclusivos'),
         h('ul', { class: 'achs' }, Perfil.UNLOCKS.map((u) => h('li', { class: `ach${Perfil.unlocked(prof, u.i) ? ' on' : ''}` },
-          av(u.i, 44), h('div', {}, h('b', {}, AVATARS[u.i].name), h('small', {}, u.req)))))));
+          av(u.i, 44), h('div', {}, h('b', {}, AVATARS[u.i].name), h('small', {}, u.req)))))),
+      transferPanel());
+  }
+
+  function transferPanel() {
+    return h('section', { class: 'panel', 'data-key': 'transfer' }, h('h2', {}, '📲 Trocar de celular'),
+      h('p', { class: 'hint' }, 'O passaporte fica guardado neste aparelho. Para levar para outro, copie o código aqui e cole lá.'),
+      showTransfer ? [
+        h('textarea', { class: 'code-out', readonly: true, rows: 3, 'aria-label': 'Código do passaporte', 'data-static': 'code-' + prof.xp }, exportCode()),
+        h('button', { class: 'btn', type: 'button', 'data-act': 'copyPass' }, '📋 Copiar código'),
+        h('form', { class: 'form-row', 'data-form': 'importPass' },
+          h('input', { name: 'code', autocomplete: 'off', placeholder: 'Colar código de outro celular', 'aria-label': 'Código de outro celular' }),
+          h('button', { class: 'btn', type: 'submit' }, 'Usar')),
+      ] : h('button', { class: 'btn', type: 'button', 'data-act': 'transfer' }, 'Levar ou trazer meu passaporte'));
   }
 
   function lobbyScreen() {
@@ -415,6 +527,7 @@ const Vila = (() => {
         picker ? avatarGrid('pickAvatar', meP.avatar, taken) : null,
         host ? h('button', { class: 'btn', type: 'button', 'data-act': 'addBot', disabled: state.players.length >= state.max }, '🤖 Chamar um bot') : null,
         host && !enough ? h('p', { class: 'hint' }, `Precisa de pelo menos ${state.min}. Sem gente? Chame bots e jogue agora.`) : null),
+      placar(),
       h('section', { class: 'panel' }, h('h2', {}, 'Regras da sala'),
         J.settings.map((s) => h('div', { class: 'setrow' }, h('span', { class: 'setlbl' }, s.label),
           h('div', { class: 'chips' }, state.options[s.key].map((v) => h('button', { class: 'chip', type: 'button', 'data-act': 'setting',
@@ -462,14 +575,28 @@ const Vila = (() => {
     if (!name) { toast('Digite seu nome.'); nameEl.focus(); return; }
     ls.set('vila-nome', name);
     Snd.unlock();
-    try { enterRoom(await api(path, { name, avatar: myAvatar, ...body })); }
-    catch (e) { toast(e.message); }
+    try { enterRoom(await api(path, { name, avatar: myAvatar, pp: passId(), ...body })); }
+    catch (e) { quickStart = false; toast(e.message); }
   }
 
   function shareText() { return `Bora jogar ${J.nome} na Vila Sossego! Sala ${state.code}: ${location.origin}${location.pathname}?sala=${state.code}`; }
 
   const ACT = {
     create: () => enter('create', {}),
+    quick: () => { quickStart = true; enter('create', { bots: J.bots || 3 }); },
+    frase: (el) => { Snd.pop(); act('chat', { text: el.dataset.t }); },
+    shareResult: async () => {
+      const text = `${J.shareText(state)}\nVem jogar na Vila Sossego: ${SITE}`;
+      try {
+        if (navigator.share) await navigator.share({ title: 'Vila Sossego', text });
+        else window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank', 'noopener');
+      } catch { /* cancelou */ }
+    },
+    transfer: () => { showTransfer = true; render(); },
+    copyPass: async () => {
+      try { await navigator.clipboard.writeText(exportCode()); toast('Código copiado! Cole no outro celular.', true); }
+      catch { const t = document.querySelector('.code-out'); if (t) { t.select(); toast('Selecione e copie o código.'); } }
+    },
     homeAvatar: (el) => {
       const i = Number(el.dataset.i);
       const u = Perfil.UNLOCKS.find((x) => x.i === i);
@@ -516,6 +643,13 @@ const Vila = (() => {
       enter('join', { code });
     },
     chat: (f) => { const i = f.elements.msg; const text = i.value.trim(); if (text) { i.value = ''; act('chat', { text }); } },
+    importPass: (f) => {
+      const code = f.elements.code.value;
+      if (!code.trim()) return;
+      if (!confirm('Trocar o passaporte deste celular pelo do código? O daqui será substituído.')) return;
+      try { importCode(code); showTransfer = false; toast('Passaporte carregado! 🎉', true); render(); }
+      catch (e) { toast(e.message); }
+    },
   };
 
   document.addEventListener('click', (e) => {
@@ -536,12 +670,20 @@ const Vila = (() => {
     try { session = JSON.parse(ls.get(`vila-sessao-${J.slug}`)); } catch { session = null; }
     const sala = new URLSearchParams(location.search).get('sala');
     if (session && sala && sala.toUpperCase() !== session.code) session = null;   // link de outra sala: entra nela
+    const comBots = new URLSearchParams(location.search).get('bots') === '1';
+    if (comBots) session = null;   // pediu partida nova com bots
     if (session) connect();
     render();
+    // link "jogar com bots" do portal: começa direto se o nome já é conhecido
+    if (comBots) {
+      history.replaceState(null, '', location.pathname);
+      if (ls.get('vila-nome')) ACT.quick();
+      else { toast('Digite seu nome e toque em "Jogar agora com bots".', true); const n = document.getElementById('nome'); if (n) n.focus(); }
+    }
   }
 
   return {
-    start, render, ACT, FORM, act, move, toast, flash, confetti, tmr, reactBar, chatPanel, resultPanel, endButtons,
+    start, render, ACT, FORM, act, move, toast, flash, confetti, tmr, reactBar, chatPanel, resultPanel, endButtons, placar, shareButton,
     P, nameOf, isHost, get state() { return state; }, get prof() { return prof; },
   };
 })();

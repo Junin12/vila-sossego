@@ -32,6 +32,12 @@
   .feats { display: flex; flex-wrap: wrap; gap: 6px; }
   .feats span { padding: 2px 10px; border: 2px solid var(--ink); border-radius: 99px; background: rgba(255,255,255,.85); color: var(--ink); font-size: .78rem; font-weight: 800; }
   .pass { flex-direction: row; align-items: center; }
+  .quickbot { display: block; margin-top: -6px; padding: 12px 16px; border: 3px dashed rgba(255,255,255,.8); border-radius: 18px; color: #fff; text-align: center; text-decoration: none; font-weight: 700; }
+  .quickbot b { font-family: var(--display); }
+  .quickbot:active { background: rgba(255,255,255,.14); }
+  .season-mini { flex-direction: row; align-items: center; gap: 12px; background: linear-gradient(160deg, #FFF6D6, #FFE08A); }
+  .season-mini .se { font-size: 2.2rem; }
+  .season-mini small { display: block; font-weight: 800; opacity: .7; font-size: .75rem; text-transform: uppercase; }
   footer { text-align: center; color: rgba(255,255,255,.75); font-size: .85rem; font-weight: 600; }
 </style>
 </head>
@@ -46,20 +52,36 @@
   <a class="game cdp" href="cara-de-pau/">
     <div class="gh"><span class="ge">🤥</span><div><small>Blefe · 2 a 6 jogadores</small><h2>Cara de Pau</h2></div></div>
     <p>Todo mundo esconde dois segredos. Diga que é o Prefeito, cobre como Agiota, espalhe fofoca… e torça para ninguém gritar "Duvido!".</p>
-    <div class="feats"><span>🤨 Duvido!</span><span>🤥 Lábia secreta</span><span>🎪 Eventos da Vila</span><span>🤖 Bots</span></div>
-    <span class="go">Jogar agora →</span>
+    <div class="feats"><span>🤨 Duvido!</span><span>🤥 Lábia secreta</span><span>🎪 Eventos</span><span>🍉 Feira</span><span>⚡ Relâmpago</span><span>🤝 Duplas</span></div>
+    <span class="go">Jogar com a turma →</span>
   </a>
+  <a class="quickbot" href="cara-de-pau/?bots=1">🤖 Sem turma? <b>Cara de Pau contra bots</b></a>
   <a class="game nd" href="ninguem-dorme/">
     <div class="gh"><span class="ge">🌙</span><div><small>Cidade dorme · 4 a 12 jogadores</small><h2>Ninguém Dorme</h2></div></div>
-    <p>Toda noite alguém some. A Delegada investiga, a Vó Zefa benze, a Cotinha espia… e os capangas fingem ser gente boa. O celular é o narrador!</p>
-    <div class="feats"><span>🎙️ Narrador por voz</span><span>🗳️ Votação ao vivo</span><span>👻 Fantasmas</span><span>🤖 Bots</span></div>
-    <span class="go">Jogar agora →</span>
+    <p>Toda noite alguém some. A Delegada investiga, a Vó Zefa cuida, a Cotinha espia… e os capangas fingem ser gente boa. O celular é o narrador!</p>
+    <div class="feats"><span>🎙️ Narrador por voz</span><span>🗳️ Votação ao vivo</span><span>🌕 Noites especiais</span><span>💘 Casal</span><span>🔦 Papéis novos</span></div>
+    <span class="go">Jogar com a turma →</span>
   </a>
+  <a class="quickbot" href="ninguem-dorme/?bots=1">🤖 Sem turma? <b>Ninguém Dorme contra bots</b></a>
+  <section class="panel season-mini" id="temp" hidden></section>
   <footer>Seu Passaporte da Vila sobe de nível jogando qualquer um dos dois. · Um jogo <b>wiapps</b></footer>
 </main>
 <script src="comum/avatars.js"></script>
 <script src="comum/perfil.js"></script>
 <script>
+  // Temporada do mês (mesma para todo mundo).
+  (function () {
+    var t = Perfil.temporada(Perfil.dayKey().slice(0, 7));
+    var box = document.getElementById('temp');
+    var e = document.createElement('span'); e.className = 'se'; e.textContent = t.emoji;
+    var d = document.createElement('div');
+    var s = document.createElement('small'); s.textContent = 'Temporada do mês';
+    var b = document.createElement('b'); b.textContent = t.nome;
+    var p = document.createElement('p'); p.className = 'hint'; p.textContent = 'Metas: ' + t.metas.map(function (m) { return m.text.toLowerCase(); }).join(' · ');
+    d.append(s, b, p);
+    box.append(e, d);
+    box.hidden = false;
+  })();
   // Mostra o passaporte (nível e título) se a pessoa já jogou neste aparelho.
   (function () {
     var p;

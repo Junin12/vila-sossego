@@ -243,3 +243,42 @@ input:focus { outline: none; box-shadow: 0 0 0 4px var(--sun); }
 }
 .loading { display: flex; flex-direction: column; align-items: center; gap: 10px; padding-top: 30vh; text-align: center; }
 .loading span { font-size: 4rem; animation: beat .6s ease-in-out infinite alternate; }
+
+/* evento / noite especial */
+.event { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border: 3px solid var(--ink); border-radius: 18px;
+  background: var(--sun); box-shadow: 0 5px 0 var(--ink); animation: pop .4s both; }
+.event .ee { font-size: 2rem; }
+.event small { display: block; font-weight: 800; font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; opacity: .7; }
+.event b { font: 800 1.1rem var(--display); margin-right: 6px; }
+.event span:last-child { font-weight: 600; font-size: .9rem; }
+
+/* frases prontas no chat */
+.quick { display: flex; gap: 6px; overflow-x: auto; padding: 2px 2px 6px; scrollbar-width: thin; }
+.qchip { flex: none; min-height: 38px; padding: 0 12px; border: 2px solid var(--ink); border-radius: 99px; background: var(--tint); color: var(--ink);
+  font: 700 .85rem var(--body); white-space: nowrap; cursor: pointer; }
+.qchip.acc { background: #FFE0E1; }
+.qchip:active { transform: scale(.95); }
+
+/* placar da noite */
+.placar h2 small { font: 700 .85rem var(--body); color: var(--muted); }
+.placar ol { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.placar li { display: flex; align-items: center; gap: 10px; padding: 4px 8px; border-radius: 12px; }
+.placar li.topo { background: #FFF1B8; }
+.placar li.me b { text-decoration: underline 3px var(--sun); }
+.placar .pos { width: 28px; text-align: center; font: 800 1rem var(--display); }
+.placar .av { --s: 32px; border-width: 2px; }
+.placar b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.placar .wins { font: 800 1.05rem var(--display); }
+
+/* temporada */
+.season { background: linear-gradient(160deg, #FFF6D6, #FFE08A); }
+.season.done { background: linear-gradient(160deg, #D9F7EA, #A8EBCF); }
+.season-head { display: flex; align-items: center; gap: 12px; }
+.season-head .se { display: grid; place-items: center; width: 52px; height: 52px; flex: none; border: 3px solid var(--ink); border-radius: 16px; background: #fff; font-size: 1.8rem; transform: rotate(-5deg); }
+.season-head small { display: block; font-weight: 800; opacity: .7; font-size: .75rem; text-transform: uppercase; letter-spacing: .06em; }
+.season-head b { font: 800 1.25rem var(--display); }
+.meta { display: flex; flex-direction: column; gap: 4px; font-weight: 700; font-size: .92rem; }
+.meta .bar { height: 12px; }
+
+/* trocar de celular */
+.code-out { width: 100%; padding: 10px; border: 3px solid var(--ink); border-radius: 12px; font: 600 .75rem/1.3 ui-monospace, monospace; word-break: break-all; resize: none; background: var(--tint); color: var(--ink); }

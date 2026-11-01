@@ -54,6 +54,30 @@ async function main() {
     console.log(`${slug}: partida inteira com ${nBots} bots em ${ms} ms`);
   }
 
+  // "Jogar agora com bots": a sala nasce com bots; duplas com número errado dá erro amigável; duplas jogam até o fim
+  {
+    const api = (p, b) => post(`/cara-de-pau/api/${p}`, b);
+    const solo = await api('create', { name: 'Solo', bots: 2, pp: 'abcd2345' });
+    const room = GAMES['cara-de-pau'].rooms.get(solo.body.code);
+    assert.equal(room.players.length, 3, 'criou com 2 bots');
+    assert.equal(room.players[0].pp, 'abcd2345');
+    assert.equal((await api('create', { name: 'Muitos', bots: 99 })).status, 200);
+    const act = (b) => api('act', { code: solo.body.code, pid: solo.body.pid, ...b });
+    assert.equal((await act({ type: 'setting', key: 'duplas', value: 1 })).status, 200);
+    const r = await act({ type: 'start' });
+    assert.equal(r.status, 400, 'duplas com 3 dá erro');
+    assert.match(r.body.error, /Duplas/);
+    assert.equal(room.round, 0, 'não contou rodada');
+    await act({ type: 'addBot' });
+    for (const [key, value] of [['feira', 1], ['cartas', 1]]) assert.equal((await act({ type: 'setting', key, value })).status, 200);
+    assert.equal((await act({ type: 'start' })).status, 200);
+    let ms = 0;
+    while (!room.counted && ms < 20000) { await wait(50); ms += 50; }
+    assert.ok(room.counted, 'partida de duplas terminou');
+    assert.equal(room.players.filter((p) => p.wins > 0).length, 2, 'a dupla inteira ganha');
+    console.log(`cara-de-pau duplas relâmpago com feira em ${ms} ms`);
+  }
+
   server.close();
   if (server.closeAllConnections) server.closeAllConnections();
   console.log('API ok');

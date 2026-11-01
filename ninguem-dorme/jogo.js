@@ -9,8 +9,9 @@ const rnd = (n) => crypto.randomInt(n);
 const chance = (pct) => rnd(100) < pct;
 const pickOne = (arr) => arr[rnd(arr.length)];
 
-const OPTIONS = { diaSecs: [60, 120, 180, 300], noiteSecs: [30, 45, 60], revelar: [1, 0] };
-const DEFAULTS = { diaSecs: 120, noiteSecs: 45, revelar: 1 };
+const OPTIONS = { diaSecs: [60, 120, 180, 300], noiteSecs: [30, 45, 60], revelar: [1, 0], extras: [1, 0], especiais: [1, 0] };
+const DEFAULTS = { diaSecs: 120, noiteSecs: 45, revelar: 1, extras: 1, especiais: 1 };
+const FESTA_SECS = 7;
 const AMANHECER_SECS = 9;
 const VOTACAO_SECS = 40;
 const VEREDITO_SECS = 9;
@@ -37,11 +38,16 @@ function botNoite(room, p) {
   if (!alvos.length) return null;
   if (acao === 'sumir') {
     const parceiro = g.players.find((x) => L.isCap(x) && x.vivo && x.id !== p.id && g.acoes[x.id]);
-    if (parceiro && chance(85)) return { t: 'noite', alvo: g.acoes[parceiro.id] };
     // capanga prefere quem andou votando em capanga
     const m = suspeitas(room, p.id);
     const ordem = alvos.slice().sort((a, b) => (m[b] || 0) - (m[a] || 0));
-    return { t: 'noite', alvo: chance(50) ? ordem[0] : pickOne(alvos) };
+    const primeiro = parceiro && chance(85) ? g.acoes[parceiro.id] : chance(50) ? ordem[0] : pickOne(alvos);
+    if (g.especial === 'lua') {
+      const resto = alvos.filter((a) => a !== primeiro);
+      const segundo = parceiro && g.acoes2[parceiro.id] && g.acoes2[parceiro.id] !== primeiro ? g.acoes2[parceiro.id] : resto.length ? pickOne(resto) : null;
+      return { t: 'noite', alvos: [primeiro, segundo].filter(Boolean) };
+    }
+    return { t: 'noite', alvo: primeiro };
   }
   if (acao === 'benzer') return { t: 'noite', alvo: alvos.includes(p.id) && chance(35) ? p.id : pickOne(alvos) };
   if (acao === 'investigar') {
@@ -109,6 +115,10 @@ function botLine(room, id) {
   ];
   if (a && a.fofoca && a.fofoca.saiu && a.fofoca.alvo !== id) lines.push(`A Cotinha viu ${nameOf(room, a.fofoca.alvo)} na rua, hein!`);
   if (a && a.sumiu) lines.push(`Coitado(a) de ${nameOf(room, a.sumiu)}… 😢`, 'Quem fez isso vai pagar!');
+  if (a && a.sumiu2) lines.push('DUAS pessoas numa noite só?! Essa lua cheia… 🌕');
+  if (a && a.saudade) lines.push(`${nameOf(room, a.saudade)} não aguentou a saudade… 💔`);
+  if (a && a.especial === 'festa') lines.push('Que festa boa ontem! Mas alguém aqui comeu pamonha demais… 🌽');
+  if (g.votoSecreto && g.fase === 'votacao') lines.push('Com essa neblina ninguém sabe em quem eu voto. 🌫️');
   if (a && a.salvo) lines.push('A Vó Zefa salvou alguém essa noite! 🌿');
   if (!chance(55)) return null;
   return pickOne(lines);
@@ -117,7 +127,8 @@ function botLine(room, id) {
 module.exports = {
   id: 'ninguem-dorme', min: MIN, max: MAX, options: OPTIONS, defaults: DEFAULTS, RuleError: L.RuleError,
   start(room) {
-    room.g = L.newGame(room.players.map((p) => p.id), { revelar: !!room.settings.revelar, rnd });
+    const s = room.settings;
+    room.g = L.newGame(room.players.map((p) => p.id), { revelar: !!s.revelar, extras: !!s.extras, especiais: !!s.especiais, rnd });
   },
   move(room, pid, m) {
     const g = room.g;
@@ -137,7 +148,7 @@ module.exports = {
     const g = room.g;
     if (g.fase === 'fim') return null;
     const s = room.settings;
-    const secs = { noite: s.noiteSecs, amanhecer: AMANHECER_SECS, dia: s.diaSecs, votacao: VOTACAO_SECS, veredito: VEREDITO_SECS }[g.fase];
+    const secs = { noite: g.especial === 'festa' ? FESTA_SECS : s.noiteSecs, amanhecer: AMANHECER_SECS, dia: s.diaSecs, votacao: VOTACAO_SECS, veredito: VEREDITO_SECS }[g.fase];
     return { key: `${room.round}|${g.fase}|${g.noite}|${g.dia}`, ids: L.waiting(g), secs };
   },
   timeout(room) { L.timeout(room.g); },

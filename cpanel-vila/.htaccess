@@ -1,2 +1,10 @@
+# wiapps.com.br/vila: qualquer caminho cai na página "Acordando a vila…" (index.html), que acorda o servidor no Render e entra.
+DirectoryIndex index.html
 RewriteEngine On
-RewriteRule .* https://vila-sossego.onrender.com/ [R=302,L]
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^ index.html [L]
+<IfModule mod_headers.c>
+  <Files "index.html">
+    Header set Cache-Control "no-cache"
+  </Files>
+</IfModule>

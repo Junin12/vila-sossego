@@ -13,6 +13,11 @@
       frase: 'Contra mau-olhado eu tenho reza.' },
     fofoqueira: { nome: 'Cotinha', curto: 'Fofoqueira', emoji: '👀', cor: '#E0565B', acao: 'fofoca', bloqueia: [],
       frase: 'Eu não falei nada, mas…' },
+    // Expansão Feira (opção da sala)
+    feirante: { nome: 'Dona Neide', curto: 'Feirante', emoji: '🍉', cor: '#E2793A', acao: 'pechincha', bloqueia: [], extra: 'feira',
+      frase: 'Pra você eu faço um precinho.' },
+    padre: { nome: 'Padre Quinzinho', curto: 'Padre', emoji: '⛪', cor: '#5B6BC9', acao: 'confissao', bloqueia: ['prisao'], extra: 'feira',
+      frase: 'Na igreja ninguém é preso, meu filho.' },
   };
 
   // custo: moedas pagas ao anunciar; carta: morador que precisa ter (senão é blefe); alvo: escolhe um jogador.
@@ -26,6 +31,8 @@
       desc: 'Paga 3. O alvo não pode duvidar nem bloquear, e na vez dele só faz bico.' },
     reza: { nome: 'Reza forte', custo: 5, carta: 'benzedeira', desc: 'Paga 5 e recupera um segredo perdido.' },
     fofoca: { nome: 'Fofoca', custo: 3, carta: 'fofoqueira', alvo: true, desc: 'Paga 3 e o alvo perde um segredo.' },
+    pechincha: { nome: 'Pechincha', custo: 0, carta: 'feirante', desc: 'Pega 1 moeda de cada jogador mais rico que você (até 3).' },
+    confissao: { nome: 'Confissão', custo: 1, carta: 'padre', alvo: true, desc: 'Paga 1 e espia um segredo do alvo (só você vê).' },
     labia: { nome: 'Vitória na lábia', custo: 0, desc: 'Você enganou a vila vezes suficientes. Ganha o jogo!' },
   };
 
@@ -42,7 +49,10 @@
     calmaria: { nome: 'Calmaria', emoji: '☀️', desc: 'Nada de diferente. Por enquanto…' },
   };
 
-  const VILA = { MORADORES, ACOES, EVENTOS, COPIAS: 3, MOEDAS_INICIO: 2, ESCANDALO_OBRIGATORIO: 10 };
+  // Moradores de uma partida: os básicos e, com a Feira ligada, os da expansão.
+  const moradoresDa = (feira) => Object.keys(MORADORES).filter((k) => !MORADORES[k].extra || (feira && MORADORES[k].extra === 'feira'));
+
+  const VILA = { MORADORES, ACOES, EVENTOS, moradoresDa, COPIAS: 3, MOEDAS_INICIO: 2, MOEDAS_RELAMPAGO: 3, ESCANDALO_OBRIGATORIO: 10 };
   if (typeof module !== 'undefined' && module.exports) module.exports = VILA;
   else root.VILA = VILA;
 })(this);

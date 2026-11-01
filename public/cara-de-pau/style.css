@@ -1,10 +1,4 @@
 /* Cara de Pau: mesa, cartas dos moradores, menu de ações. A base visual vem de ../comum/base.css. */
-.event { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border: 3px solid var(--ink); border-radius: 18px;
-  background: var(--sun); box-shadow: 0 5px 0 var(--ink); animation: pop .4s both; }
-.event .ee { font-size: 2rem; }
-.event small { display: block; font-weight: 800; font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; opacity: .7; }
-.event b { font: 800 1.1rem var(--display); margin-right: 6px; }
-.event span:last-child { font-weight: 600; font-size: .9rem; }
 
 .table { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
 .seat { display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 3px solid var(--ink); border-radius: 18px; background: #fff;
@@ -96,7 +90,7 @@ button.card { cursor: pointer; }
 .log li:first-child { background: #FFF1B8; }
 
 /* fim */
-.winner { display: flex; justify-content: center; }
+.winner { display: flex; justify-content: center; gap: 12px; }
 .winner .av { border-width: 5px; animation: pop .6s .2s cubic-bezier(.3, 1.6, .5, 1) both; }
 .reveal-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 2px dashed var(--tint); }
 .reveal-row small { color: var(--muted); font-weight: 700; font-size: .78rem; }
@@ -106,3 +100,9 @@ button.card { cursor: pointer; }
 .award .aemoji { font-size: 1.6rem; }
 .award small { color: var(--muted); font-weight: 700; line-height: 1.2; }
 .award b { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* duplas e confissão */
+.seat.mate { border-style: dashed; background: #E4F7EE; }
+.seat.mate.turn { background: var(--sun); }
+.seat .bot.mate { display: inline; background: var(--mint); }
+.confs { display: flex; flex-direction: column; gap: 2px; padding: 6px 10px; border: 2px dashed var(--ink); border-radius: 12px; background: #EEF0FF; font-weight: 700; }
