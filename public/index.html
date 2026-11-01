@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2E3BD6">
+<meta name="description" content="Vila Sossego: jogos de festa para jogar com a turma, cada um no seu celular. Cara de Pau e Ninguém Dorme.">
+<meta property="og:title" content="Vila Sossego · jogos de festa">
+<meta property="og:description" content="Cara de Pau (blefe) e Ninguém Dorme (cidade dorme). Cada um no seu celular, de graça.">
+<title>Vila Sossego</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='4' y='4' width='56' height='56' rx='16' fill='%23FFD23F' stroke='%2317143F' stroke-width='5'/%3E%3Ctext x='32' y='44' font-size='30' text-anchor='middle'%3E%F0%9F%8F%98%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Figtree:wght@500;700;800&display=swap">
+<link rel="stylesheet" href="comum/base.css">
+<style>
+  .town { text-align: center; color: #fff; padding-top: 10px; }
+  .town .houses { font-size: 2.6rem; letter-spacing: .1em; }
+  .town h1 { font-size: clamp(2.6rem, 13vw, 3.6rem); transform: rotate(-2deg); text-shadow: 0 5px 0 var(--ink); }
+  .town p { font-weight: 700; opacity: .92; }
+  .game { display: flex; flex-direction: column; gap: 10px; padding: 18px; border: 3px solid var(--ink); border-radius: 24px; color: var(--ink);
+    text-decoration: none; box-shadow: 0 7px 0 var(--ink); transition: transform .1s, box-shadow .1s; }
+  .game:active { transform: translateY(5px); box-shadow: 0 2px 0 var(--ink); }
+  .game.cdp { background: linear-gradient(160deg, #FFB86B, #F26B3A); }
+  .game.nd { background: linear-gradient(160deg, #4A57B8, #1D2459); color: #fff; }
+  .game .gh { display: flex; align-items: center; gap: 12px; }
+  .game .ge { display: grid; place-items: center; width: 64px; height: 64px; flex: none; border: 3px solid var(--ink); border-radius: 18px; background: var(--sun); font-size: 2.2rem; transform: rotate(-6deg); }
+  .game h2 { color: inherit; font-size: 1.9rem; }
+  .game small { font-weight: 800; opacity: .85; }
+  .game p { font-weight: 600; }
+  .game .go { align-self: flex-start; padding: 6px 16px; border: 3px solid var(--ink); border-radius: 99px; background: #fff; color: var(--ink); font: 800 1rem var(--display); }
+  .feats { display: flex; flex-wrap: wrap; gap: 6px; }
+  .feats span { padding: 2px 10px; border: 2px solid var(--ink); border-radius: 99px; background: rgba(255,255,255,.85); color: var(--ink); font-size: .78rem; font-weight: 800; }
+  .pass { flex-direction: row; align-items: center; }
+  footer { text-align: center; color: rgba(255,255,255,.75); font-size: .85rem; font-weight: 600; }
+</style>
+</head>
+<body class="j-portal">
+<main id="app">
+  <header class="town">
+    <div class="houses" aria-hidden="true">🏠🏡⛪🏪🏠</div>
+    <h1>Vila Sossego</h1>
+    <p>Uma cidadezinha onde ninguém é quem diz ser. Junte a turma, cada um no seu celular.</p>
+  </header>
+  <section class="panel pass" id="pass" hidden></section>
+  <a class="game cdp" href="cara-de-pau/">
+    <div class="gh"><span class="ge">🤥</span><div><small>Blefe · 2 a 6 jogadores</small><h2>Cara de Pau</h2></div></div>
+    <p>Todo mundo esconde dois segredos. Diga que é o Prefeito, cobre como Agiota, espalhe fofoca… e torça para ninguém gritar "Duvido!".</p>
+    <div class="feats"><span>🤨 Duvido!</span><span>🤥 Lábia secreta</span><span>🎪 Eventos da Vila</span><span>🤖 Bots</span></div>
+    <span class="go">Jogar agora →</span>
+  </a>
+  <a class="game nd" href="ninguem-dorme/">
+    <div class="gh"><span class="ge">🌙</span><div><small>Cidade dorme · 4 a 12 jogadores</small><h2>Ninguém Dorme</h2></div></div>
+    <p>Toda noite alguém some. A Delegada investiga, a Vó Zefa benze, a Cotinha espia… e os capangas fingem ser gente boa. O celular é o narrador!</p>
+    <div class="feats"><span>🎙️ Narrador por voz</span><span>🗳️ Votação ao vivo</span><span>👻 Fantasmas</span><span>🤖 Bots</span></div>
+    <span class="go">Jogar agora →</span>
+  </a>
+  <footer>Seu Passaporte da Vila sobe de nível jogando qualquer um dos dois. · Um jogo <b>wiapps</b></footer>
+</main>
+<script src="comum/avatars.js"></script>
+<script src="comum/perfil.js"></script>
+<script>
+  // Mostra o passaporte (nível e título) se a pessoa já jogou neste aparelho.
+  (function () {
+    var p;
+    try { p = JSON.parse(localStorage.getItem('vila-perfil')); } catch (e) { p = null; }
+    if (!p || !p.xp) return;
+    var li = Perfil.levelInfo(p.xp);
+    var i = Number(localStorage.getItem('vila-avatar')) || 0;
+    var a = AVATARS[i] || AVATARS[0];
+    var box = document.getElementById('pass');
+    var d = document.createElement('div');
+    d.className = 'av'; d.style.cssText = '--s:56px;background:' + a.bg;
+    d.innerHTML = '<svg viewBox="0 0 64 64" aria-hidden="true">' + a.art + '</svg>';
+    var t = document.createElement('div');
+    t.className = 'grow';
+    var b = document.createElement('b'); b.textContent = 'Nível ' + li.level + ' · ' + li.title;
+    var s = document.createElement('small'); s.className = 'hint'; s.textContent = p.partidas + ' partidas · ' + p.vitorias + ' vitórias';
+    var bar = document.createElement('span'); bar.className = 'bar';
+    var fill = document.createElement('i'); fill.style.setProperty('--w', Math.round(li.into / li.need * 100) + '%'); bar.appendChild(fill);
+    t.append(b, s, bar);
+    box.append(d, t);
+    box.hidden = false;
+  })();
+</script>
+</body>
+</html>

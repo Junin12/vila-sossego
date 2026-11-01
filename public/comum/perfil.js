@@ -1,0 +1,129 @@
+'use strict';
+// Passaporte da Vila: nível, XP, conquistas, personagens exclusivos e desafio do dia, somando os dois jogos.
+// Lógica pura (sem DOM) para ser testável no Node. Fica no aparelho (localStorage): é diversão, não segurança.
+const Perfil = (() => {
+  const XP = { partida: 20, vitoria: 30, blefe: 3, duvidaCerta: 5, labia: 25, votoCerto: 6, sobreviveu: 10, capanga: 15, diario: 60 };
+  const TITLES = [[1, 'Forasteiro'], [3, 'Vizinho novo'], [5, 'Morador antigo'], [8, 'Fofoqueiro de plantão'],
+    [12, 'Figura da Vila'], [16, 'Lenda de Sossego'], [20, 'Dono da Vila']];
+  const needFor = (lvl) => 100 + (lvl - 1) * 50;
+
+  function levelInfo(xp) {
+    let lvl = 1, rest = xp;
+    while (rest >= needFor(lvl)) { rest -= needFor(lvl); lvl++; }
+    return { level: lvl, into: rest, need: needFor(lvl), title: TITLES.filter((t) => t[0] <= lvl).pop()[1] };
+  }
+
+  const blank = () => ({
+    v: 1, xp: 0, partidas: 0, vitorias: 0, streak: 0, bestStreak: 0, days: 0, lastDay: '', dailyDone: 0, ach: {}, daily: null,
+    cdp: { partidas: 0, vitorias: 0, blefes: 0, duvidasCertas: 0, labia: 0 },
+    nd: { partidas: 0, vitorias: 0, vitCapanga: 0, vitVila: 0, sobreviveu: 0, votosCertos: 0, delegadaAcertos: 0 },
+  });
+
+  const ACH = [
+    ['estreia', '🎟️', 'Chegou na vila', 'Jogue sua primeira partida', (p) => p.partidas >= 1],
+    ['vence1', '🏆', 'Primeira vitória', 'Vença uma partida', (p) => p.vitorias >= 1],
+    ['blefe10', '🤥', 'Cara de pau', 'Passe 10 blefes sem ser pego', (p) => p.cdp.blefes >= 10],
+    ['blefe50', '🎭', 'Mentiroso profissional', 'Passe 50 blefes sem ser pego', (p) => p.cdp.blefes >= 50],
+    ['labia', '🗣️', 'Lábia de ouro', 'Vença um Cara de Pau na lábia', (p) => p.cdp.labia >= 1],
+    ['duvido10', '🤨', 'Duvido!', 'Pegue 10 blefes dos outros', (p) => p.cdp.duvidasCertas >= 10],
+    ['capanga', '🦹', 'Crime perfeito', 'Vença o Ninguém Dorme como capanga', (p) => p.nd.vitCapanga >= 1],
+    ['vila3', '🏘️', 'Herói da vila', 'Vença 3 vezes com a vila no Ninguém Dorme', (p) => p.nd.vitVila >= 3],
+    ['faro', '🔎', 'Faro fino', 'Vote certo num capanga 10 vezes', (p) => p.nd.votosCertos >= 10],
+    ['sobrevive', '🛌', 'Sono leve', 'Chegue vivo ao fim de 5 partidas do Ninguém Dorme', (p) => p.nd.sobreviveu >= 5],
+    ['st3', '🔥', 'Em chamas', '3 vitórias seguidas', (p) => p.bestStreak >= 3],
+    ['p25', '🗓️', 'Freguês', 'Jogue 25 partidas', (p) => p.partidas >= 25],
+    ['lv5', '⭐', 'Nível 5', 'Chegue ao nível 5', (p) => levelInfo(p.xp).level >= 5],
+    ['lv10', '🌟', 'Nível 10', 'Chegue ao nível 10', (p) => levelInfo(p.xp).level >= 10],
+    ['daily5', '📅', 'Batendo ponto', 'Complete 5 desafios do dia', (p) => p.dailyDone >= 5],
+    ['os2', '🎪', 'Turista completo', 'Jogue os dois jogos da vila', (p) => p.cdp.partidas >= 1 && p.nd.partidas >= 1],
+  ].map((a) => ({ id: a[0], emoji: a[1], name: a[2], desc: a[3], test: a[4] }));
+
+  // Personagens 12..19 (ver AVATARS em avatars.js)
+  const UNLOCKS = [
+    { i: 12, req: 'Chegue ao nível 3', test: (p) => levelInfo(p.xp).level >= 3 },
+    { i: 13, req: 'Passe 10 blefes no Cara de Pau', test: (p) => p.cdp.blefes >= 10 },
+    { i: 14, req: 'Vença como capanga no Ninguém Dorme', test: (p) => p.nd.vitCapanga >= 1 },
+    { i: 15, req: 'Vote certo num capanga 5 vezes', test: (p) => p.nd.votosCertos >= 5 },
+    { i: 16, req: '3 vitórias seguidas', test: (p) => p.bestStreak >= 3 },
+    { i: 17, req: 'Chegue ao nível 7', test: (p) => levelInfo(p.xp).level >= 7 },
+    { i: 18, req: 'Complete 3 desafios do dia', test: (p) => p.dailyDone >= 3 },
+    { i: 19, req: 'Vença um Cara de Pau na lábia', test: (p) => p.cdp.labia >= 1 },
+  ];
+
+  // Desafio do dia: igual para todo mundo, sorteado pela data. on(e) diz quanto avança com o evento de fim de partida.
+  const DAILY = [
+    { id: 'play2', text: 'Jogue 2 partidas', goal: 2, on: () => 1 },
+    { id: 'win1', text: 'Vença uma partida', goal: 1, on: (e) => (e.won ? 1 : 0) },
+    { id: 'blefe3', text: 'Passe 3 blefes no Cara de Pau', goal: 3, on: (e) => e.blefes || 0 },
+    { id: 'duvido2', text: 'Pegue 2 blefes no Cara de Pau', goal: 2, on: (e) => e.duvidasCertas || 0 },
+    { id: 'nd1', text: 'Jogue uma partida de Ninguém Dorme', goal: 1, on: (e) => (e.jogo === 'nd' ? 1 : 0) },
+    { id: 'cdp1', text: 'Jogue uma partida de Cara de Pau', goal: 1, on: (e) => (e.jogo === 'cdp' ? 1 : 0) },
+    { id: 'voto2', text: 'Vote certo num capanga 2 vezes', goal: 2, on: (e) => e.votosCertos || 0 },
+    { id: 'vivo1', text: 'Chegue vivo ao fim do Ninguém Dorme', goal: 1, on: (e) => (e.jogo === 'nd' && e.survived ? 1 : 0) },
+  ];
+
+  const dayKey = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const dailyFor = (key) => {
+    let n = 0;
+    for (const ch of key) n = (n * 31 + ch.charCodeAt(0)) >>> 0;
+    return DAILY[n % DAILY.length];
+  };
+
+  // Completa campos de versões antigas e atualiza dia/desafio.
+  function touch(p, today = dayKey()) {
+    const b = blank();
+    for (const k of Object.keys(b)) if (p[k] == null) p[k] = b[k];
+    p.cdp = Object.assign(b.cdp, p.cdp);
+    p.nd = Object.assign(b.nd, p.nd);
+    if (p.lastDay !== today) { p.days++; p.lastDay = today; }
+    if (!p.daily || p.daily.day !== today) p.daily = { day: today, id: dailyFor(today).id, prog: 0, done: false };
+    return p;
+  }
+
+  const snapshot = (p) => JSON.parse(JSON.stringify(p));
+
+  // e = { jogo: 'cdp'|'nd', won, blefes, duvidasCertas, labiaWin, team, survived, votosCertos, delegadaAcertos }
+  function onGame(p, e, today = dayKey()) {
+    touch(p, today);
+    const before = snapshot(p);
+    let gain = XP.partida;
+    p.partidas++;
+    if (e.won) { p.vitorias++; gain += XP.vitoria; p.streak++; p.bestStreak = Math.max(p.bestStreak, p.streak); } else p.streak = 0;
+    if (e.jogo === 'cdp') {
+      const c = p.cdp;
+      c.partidas++;
+      if (e.won) c.vitorias++;
+      c.blefes += e.blefes || 0;
+      c.duvidasCertas += e.duvidasCertas || 0;
+      gain += (e.blefes || 0) * XP.blefe + (e.duvidasCertas || 0) * XP.duvidaCerta;
+      if (e.labiaWin) { c.labia++; gain += XP.labia; }
+    } else {
+      const n = p.nd;
+      n.partidas++;
+      if (e.won) { n.vitorias++; if (e.team === 'capangas') { n.vitCapanga++; gain += XP.capanga; } else n.vitVila++; }
+      if (e.survived) { n.sobreviveu++; gain += XP.sobreviveu; }
+      n.votosCertos += e.votosCertos || 0;
+      n.delegadaAcertos += e.delegadaAcertos || 0;
+      gain += (e.votosCertos || 0) * XP.votoCerto;
+    }
+    p.xp += gain;
+    // desafio do dia
+    const def = DAILY.find((x) => x.id === p.daily.id);
+    let dailyDone = false;
+    if (def && !p.daily.done) {
+      p.daily.prog += def.on(e);
+      if (p.daily.prog >= def.goal) { p.daily.done = true; p.dailyDone++; p.xp += XP.diario; gain += XP.diario; dailyDone = true; }
+    }
+    const out = { xp: gain, levelUp: null, ach: [], avatars: [], dailyDone };
+    for (const a of ACH) if (!p.ach[a.id] && a.test(p)) { p.ach[a.id] = today; out.ach.push(a); }
+    const lvBefore = levelInfo(before.xp).level, lvAfter = levelInfo(p.xp).level;
+    if (lvAfter > lvBefore) out.levelUp = lvAfter;
+    for (const u of UNLOCKS) if (u.test(p) && !u.test(before)) out.avatars.push(u.i);
+    return out;
+  }
+
+  const unlocked = (p, i) => i < 12 || UNLOCKS.some((u) => u.i === i && u.test(p));
+
+  return { blank, touch, onGame, levelInfo, dailyFor, dayKey, unlocked, ACH, UNLOCKS, DAILY, XP, TITLES };
+})();
+if (typeof module !== 'undefined') module.exports = Perfil;

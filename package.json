@@ -1,0 +1,14 @@
+{
+  "name": "vila-sossego",
+  "version": "1.0.0",
+  "description": "Jogos de festa da Vila Sossego: Cara de Pau (blefe) e Ninguém Dorme (cidade dorme), cada um no seu celular.",
+  "main": "server.js",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test/cara-de-pau.logica.test.js && node test/ninguem-dorme.logica.test.js && node test/perfil.test.js && node test/api.test.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

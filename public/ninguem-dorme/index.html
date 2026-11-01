@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#121741">
+<meta name="description" content="Jogo de festa da Vila Sossego no estilo Cidade Dorme: 4 a 12 jogadores, o celular é o narrador. Descubra os capangas antes que a vila suma.">
+<meta property="og:title" content="Ninguém Dorme · Vila Sossego">
+<meta property="og:description" content="Jogo de festa da Vila Sossego no estilo Cidade Dorme: 4 a 12 jogadores, o celular é o narrador. Descubra os capangas antes que a vila suma.">
+<title>Ninguém Dorme</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='4' y='4' width='56' height='56' rx='16' fill='%23FFD23F' stroke='%2317143F' stroke-width='5'/%3E%3Ctext x='32' y='44' font-size='30' text-anchor='middle'%3E%F0%9F%8C%99%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Figtree:wght@500;700;800&display=swap">
+<link rel="stylesheet" href="../comum/base.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main id="app">
+  <div id="conn" role="status" hidden>Reconectando…</div>
+  <header id="top" class="top"></header>
+  <div id="view"></div>
+  <noscript><p class="lead">Ninguém Dorme precisa de JavaScript para funcionar.</p></noscript>
+</main>
+<div id="modal"></div>
+<div id="flash" role="status" aria-live="assertive" hidden></div>
+<div id="toast" role="alert" hidden></div>
+<div id="fx" class="confetti" aria-hidden="true"></div>
+<script src="../comum/avatars.js"></script>
+<script src="../comum/qr.js"></script>
+<script src="../comum/sound.js"></script>
+<script src="../comum/perfil.js"></script>
+<script src="../comum/vila.js"></script>
+<script src="papeis.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

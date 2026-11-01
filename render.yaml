@@ -1,0 +1,9 @@
+# Deploy automático no Render a partir do GitHub (Blueprint).
+services:
+  - type: web
+    name: vila-sossego
+    runtime: node
+    plan: free
+    buildCommand: echo "sem dependências"
+    startCommand: node server.js
+    healthCheckPath: /healthz

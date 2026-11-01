@@ -1,0 +1,246 @@
+'use strict';
+// Regras do Ninguém Dorme, sem rede nem timers: o servidor chama act() e timeout(); os testes chamam direto.
+//
+// Fases: 'noite' (cada um faz sua ação no próprio celular; quem não tem poder "dorme")
+//        → 'amanhecer' (quem sumiu, o que a Cotinha espalhou) → 'dia' (conversa) → 'votacao'
+//        → 'veredito' (quem foi expulso) → 'noite' … até 'fim'.
+// Vila vence quando não sobra capanga; capangas vencem quando são tantos quanto o resto.
+
+const { PAPEIS, distribuir, MIN, MAX } = require('../public/ninguem-dorme/papeis');
+
+class RuleError extends Error {}
+const fail = (msg) => { throw new RuleError(msg); };
+const defaultRnd = (n) => Math.floor(Math.random() * n);
+const LOG_MAX = 50;
+
+const P = (g, id) => g.players.find((p) => p.id === id);
+const vivos = (g) => g.players.filter((p) => p.vivo);
+const isCap = (p) => p.papel === 'capanga';
+
+function log(g, entry) {
+  g.log.push({ n: ++g.seq, ...entry });
+  if (g.log.length > LOG_MAX) g.log.shift();
+}
+
+function shuffle(g, arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = g.rnd(i + 1);
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+// opts: { revelar: mostra o papel de quem sai (padrão sim), rnd }
+function newGame(ids, opts = {}) {
+  if (ids.length < MIN || ids.length > MAX) fail(`O jogo é de ${MIN} a ${MAX} jogadores.`);
+  const g = {
+    rnd: opts.rnd || defaultRnd, revelar: opts.revelar !== false,
+    fase: 'noite', noite: 1, dia: 0, players: [], acoes: {}, benzidoAntes: {}, investigados: {}, priv: {},
+    anuncio: null, votos: {}, veredito: null, vencedor: null, log: [], seq: 0,
+  };
+  const papeis = shuffle(g, distribuir(ids.length));
+  ids.forEach((id, i) => g.players.push({ id, papel: papeis[i], vivo: true, revelado: false, pronto: false,
+    stats: { votosCertos: 0, votosErrados: 0, investigouCapanga: 0, salvou: 0 } }));
+  log(g, { t: 'noite', noite: 1 });
+  return g;
+}
+
+function waiting(g) {
+  if (g.fase === 'noite') return vivos(g).filter((p) => !(p.id in g.acoes)).map((p) => p.id);
+  if (g.fase === 'dia') return vivos(g).filter((p) => !p.pronto).map((p) => p.id);
+  if (g.fase === 'votacao') return vivos(g).filter((p) => !(p.id in g.votos)).map((p) => p.id);
+  return [];
+}
+
+// Quem cada papel pode escolher à noite.
+function alvosNoite(g, p) {
+  const acao = PAPEIS[p.papel].noite;
+  if (!acao || !p.vivo) return [];
+  return vivos(g).filter((x) => {
+    if (acao === 'sumir') return !isCap(x);
+    if (acao === 'benzer') return g.benzidoAntes[p.id] !== x.id;
+    if (acao === 'investigar') return x.id !== p.id;
+    if (acao === 'espiar') return x.id !== p.id;
+    return false;
+  }).map((x) => x.id);
+}
+
+function checkWin(g) {
+  const caps = vivos(g).filter(isCap).length;
+  const resto = vivos(g).length - caps;
+  if (caps === 0) g.vencedor = 'vila';
+  else if (caps >= resto) g.vencedor = 'capangas';
+  if (g.vencedor) { g.fase = 'fim'; log(g, { t: 'fim', vencedor: g.vencedor }); return true; }
+  return false;
+}
+
+function tirar(g, p) {
+  p.vivo = false;
+  p.pronto = false;
+  if (g.revelar) p.revelado = true;
+}
+
+function maisVotado(g, contagem) {
+  let max = 0, top = [];
+  for (const [id, n] of Object.entries(contagem)) {
+    if (n > max) { max = n; top = [id]; } else if (n === max) top.push(id);
+  }
+  return { max, top };
+}
+
+function resolverNoite(g) {
+  const vivosAntes = vivos(g);
+  // capangas: alvo mais escolhido; empate sorteia
+  const conta = {};
+  for (const p of vivosAntes.filter(isCap)) {
+    const a = g.acoes[p.id];
+    if (a) conta[a] = (conta[a] || 0) + 1;
+  }
+  const { top } = maisVotado(g, conta);
+  const alvo = top.length ? top[g.rnd(top.length)] : null;
+  const benz = vivosAntes.find((p) => p.papel === 'benzedeira');
+  const benzido = benz ? g.acoes[benz.id] || null : null;
+  for (const p of vivosAntes) if (p.papel === 'benzedeira') g.benzidoAntes[p.id] = g.acoes[p.id] || null;
+  const salvo = !!(alvo && alvo === benzido);
+  if (salvo) benz.stats.salvou += 1;
+
+  for (const d of vivosAntes.filter((p) => p.papel === 'delegada')) {
+    const a = g.acoes[d.id];
+    if (!a) continue;
+    const t = P(g, a);
+    (g.priv[d.id] = g.priv[d.id] || []).push({ noite: g.noite, alvo: a, capanga: isCap(t) });
+    (g.investigados[d.id] = g.investigados[d.id] || []).push(a);
+    if (isCap(t)) d.stats.investigouCapanga += 1;
+  }
+
+  let fofoca = null;
+  const fofo = vivosAntes.find((p) => p.papel === 'fofoqueira' && g.acoes[p.id]);
+  if (fofo) {
+    const t = P(g, g.acoes[fofo.id]);
+    fofoca = { alvo: t.id, saiu: !!(PAPEIS[t.papel].sai && g.acoes[t.id]) };
+  }
+
+  const sumiu = alvo && !salvo ? P(g, alvo) : null;
+  if (sumiu) tirar(g, sumiu);
+  g.anuncio = { noite: g.noite, sumiu: sumiu ? sumiu.id : null, papel: sumiu && g.revelar ? sumiu.papel : null, salvo, fofoca };
+  log(g, { t: 'amanhecer', ...g.anuncio });
+  g.acoes = {};
+  if (!checkWin(g)) g.fase = 'amanhecer';
+}
+
+function abrirDia(g) {
+  g.fase = 'dia';
+  g.dia += 1;
+  for (const p of g.players) p.pronto = false;
+  log(g, { t: 'dia', dia: g.dia });
+}
+
+function abrirVotacao(g) {
+  g.fase = 'votacao';
+  g.votos = {};
+  log(g, { t: 'votacao', dia: g.dia });
+}
+
+function resolverVotos(g) {
+  const conta = {};
+  let pular = 0;
+  for (const [voter, alvo] of Object.entries(g.votos)) {
+    const v = P(g, voter);
+    const peso = v.papel === 'prefeito' ? 2 : 1;
+    if (alvo === 'pular') { pular += peso; continue; }
+    conta[alvo] = (conta[alvo] || 0) + peso;
+    if (isCap(P(g, alvo))) v.stats.votosCertos += 1; else v.stats.votosErrados += 1;
+  }
+  const { max, top } = maisVotado(g, conta);
+  const expulso = top.length === 1 && max > pular ? P(g, top[0]) : null;
+  if (expulso) tirar(g, expulso);
+  g.veredito = { dia: g.dia, expulso: expulso ? expulso.id : null, papel: expulso && g.revelar ? expulso.papel : null,
+    empate: top.length > 1 && max > pular, votos: { ...g.votos } };
+  log(g, { t: 'veredito', expulso: g.veredito.expulso, papel: g.veredito.papel, empate: g.veredito.empate });
+  g.fase = 'veredito';
+}
+
+function depoisVeredito(g) {
+  if (checkWin(g)) return;
+  g.noite += 1;
+  g.fase = 'noite';
+  g.acoes = {};
+  log(g, { t: 'noite', noite: g.noite });
+}
+
+function act(g, pid, move) {
+  const p = P(g, pid);
+  if (!p) fail('Você não está nesta partida.');
+  if (g.fase === 'fim') fail('A partida acabou.');
+  if (!p.vivo) fail('Você sumiu da vila… agora só assiste. 👻');
+  const t = move && move.t;
+  if (g.fase === 'noite') {
+    if (t !== 'noite') fail('É noite: faça sua ação ou durma.');
+    if (PAPEIS[p.papel].noite && move.alvo != null) {   // sem alvo = ficou em casa
+      if (!alvosNoite(g, p).includes(move.alvo)) fail('Escolha alguém válido.');
+      g.acoes[pid] = move.alvo;
+    } else {
+      g.acoes[pid] = null;   // dormiu
+    }
+    if (!waiting(g).length) resolverNoite(g);
+    return;
+  }
+  if (g.fase === 'dia') {
+    if (t !== 'pronto') fail('Agora é hora de conversar.');
+    p.pronto = !p.pronto;
+    if (!waiting(g).length) abrirVotacao(g);
+    return;
+  }
+  if (g.fase === 'votacao') {
+    if (t !== 'voto') fail('Vote em alguém ou pule.');
+    const alvo = move.alvo;
+    if (alvo !== 'pular') {
+      const a = P(g, alvo);
+      if (!a || !a.vivo || a.id === pid) fail('Vote em alguém que ainda está na vila.');
+    }
+    g.votos[pid] = alvo;
+    if (!waiting(g).length) resolverVotos(g);
+    return;
+  }
+  fail('Espere um pouco…');
+}
+
+// Tempo esgotado: a fase acaba com quem já agiu (quem não agiu, não fez nada).
+function timeout(g) {
+  if (g.fase === 'noite') return resolverNoite(g);
+  if (g.fase === 'amanhecer') return abrirDia(g);
+  if (g.fase === 'dia') return abrirVotacao(g);
+  if (g.fase === 'votacao') return resolverVotos(g);
+  if (g.fase === 'veredito') return depoisVeredito(g);
+}
+
+function viewFor(g, pid) {
+  const me = P(g, pid);
+  const fim = g.fase === 'fim';
+  const fantasma = !!(me && !me.vivo);
+  const souCap = !!(me && isCap(me));
+  const verPapel = (p) => fim || p.id === pid || fantasma || p.revelado || (souCap && isCap(p));
+  const v = {
+    fase: g.fase, noite: g.noite, dia: g.dia, waiting: waiting(g), vencedor: g.vencedor, revelar: g.revelar,
+    anuncio: g.anuncio, log: g.log,
+    players: g.players.map((p) => ({
+      id: p.id, vivo: p.vivo, papel: verPapel(p) ? p.papel : null, pronto: p.pronto,
+      votou: g.fase === 'votacao' ? p.id in g.votos : false,
+      stats: fim ? p.stats : null,
+    })),
+    votos: g.fase === 'votacao' ? g.votos : null,
+    veredito: g.veredito && (g.fase === 'veredito' || fim) ? g.veredito : null,
+  };
+  if (g.veredito && g.fase === 'veredito' && !g.revelar && !fantasma) v.veredito = { ...g.veredito, papel: null };
+  if (me) {
+    v.me = { papel: me.papel, vivo: me.vivo, time: PAPEIS[me.papel].time, priv: g.priv[pid] || [],
+      alvos: g.fase === 'noite' ? alvosNoite(g, me) : [], acao: g.fase === 'noite' && pid in g.acoes ? g.acoes[pid] : undefined,
+      benzidoAntes: g.benzidoAntes[pid] || null };
+    if (souCap && g.fase === 'noite') {
+      v.me.capangas = Object.fromEntries(g.players.filter(isCap).filter((p) => p.vivo).map((p) => [p.id, g.acoes[p.id] || null]));
+    }
+  }
+  return v;
+}
+
+module.exports = { newGame, act, timeout, viewFor, waiting, alvosNoite, isCap, RuleError, P, vivos };
