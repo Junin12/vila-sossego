@@ -41,3 +41,6 @@ node server.js 3010      # http://localhost:3010
 npm test                 # regras, passaporte e partidas inteiras com bots
 ```
 Deploy: Render (Blueprint do `render.yaml`); wiapps.com.br/vila redireciona para lá.
+
+## Endereço wiapps.com.br/vila
+O jogo roda no Render (https://vila-sossego.onrender.com). A pasta `cpanel-vila/` tem o `.htaccess` e o `index.html` que vão em `public_html/vila` no cPanel para redirecionar para lá.
