@@ -48,12 +48,18 @@
     var destino = BASE + (resto || '/') + location.search;
     var frases = ['Acordando a vila…', 'O galo já cantou… 🐓', 'Abrindo as janelas… 🪟', 'Passando o café… ☕', 'Varrendo a calçada… 🧹', 'Quase lá! 🏃'];
     var msg = document.getElementById('msg'), bar = document.getElementById('bar');
-    var t0 = Date.now(), i = 0, foi = false;
+    var t0 = Date.now(), i = 0, foi = false, avisou = false;
     var tick = setInterval(function () {
       var s = (Date.now() - t0) / 1000;
       bar.style.width = Math.min(92, 8 + s * 1.6) + '%';
       if (s > i * 6 + 6 && i < frases.length - 1) msg.textContent = frases[++i];
-      if (s > 75) document.getElementById('tip').innerHTML = 'Está demorando mais que o normal. <a href="' + destino + '">Tentar entrar mesmo assim</a>';
+      if (s > 75 && !avisou) {
+        avisou = true;
+        var tip = document.getElementById('tip'), a = document.createElement('a');
+        a.href = destino; a.textContent = 'Tentar entrar mesmo assim';
+        tip.textContent = 'Está demorando mais que o normal. ';
+        tip.appendChild(a);
+      }
     }, 400);
     function entrar() {
       if (foi) return;
