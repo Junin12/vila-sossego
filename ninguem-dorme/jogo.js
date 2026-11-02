@@ -74,7 +74,9 @@ function botVoto(room, p) {
   }
   if (chance(8)) return { t: 'voto', alvo: 'pular' };
   const m = suspeitas(room, p.id);
-  const peso = (x) => (m[x.id] || 0) + (conta[x.id] || 0) * 4 + ((g.priv[p.id] || []).some((r) => r.alvo === x.id && !r.capanga) ? -50 : 0);
+  // quem sumiu do celular (offline) e não fala nada fica suspeito: sem isso, um capanga que caiu da sala travava a partida
+  const ausente = (x) => { const rp = room.players.find((y) => y.id === x.id); return rp && !rp.bot && !rp.res ? 25 : 0; };
+  const peso = (x) => (m[x.id] || 0) + (conta[x.id] || 0) * 4 + ausente(x) + ((g.priv[p.id] || []).some((r) => r.alvo === x.id && !r.capanga) ? -50 : 0);
   return { t: 'voto', alvo: vivos.slice().sort((a, b) => peso(b) - peso(a))[0].id };
 }
 
