@@ -2,13 +2,13 @@
 
 Jogos de festa para jogar com a turma, **cada um no seu celular**. Sem turma? Chame **bots**.
 
-| | 🤥 **Cara de Pau** | 🌙 **Ninguém Dorme** |
-|---|---|---|
-| Estilo | Blefe | Cidade dorme (papéis secretos) |
-| Jogadores | 2 a 6 | 4 a 12 |
-| Destaques | "Duvido!", lábia secreta, Eventos, Feira, Relâmpago, Duplas | narrador por voz, votação ao vivo, fantasmas, papéis novos, casal, noites especiais |
+| | 🤥 **Cara de Pau** | 🌙 **Ninguém Dorme** | 🕵️ **Intruso** |
+|---|---|---|---|
+| Estilo | Blefe | Cidade dorme (papéis secretos) | Ache o impostor (palavra secreta) |
+| Jogadores | 2 a 6 | 4 a 12 | 3 a 10 |
+| Destaques | "Duvido!", lábia secreta, Eventos, Feira, Relâmpago, Duplas | narrador por voz, votação ao vivo, fantasmas, papéis novos, casal, noites especiais | palavra parecida, cúmplice, lista da turma, 1 celular só |
 
-Os dois compartilham o **Passaporte da Vila**: nível, títulos, 17 conquistas, 8 personagens exclusivos, desafio do dia,
+Os três compartilham o **Passaporte da Vila**: nível, títulos, 20 conquistas, 8 personagens exclusivos, desafio do dia,
 **temporada do mês** (3 metas com tema, selo e XP) e código para **trocar de celular**.
 Nas salas: **Jogar agora com bots**, **placar da noite** (vitórias somadas a cada revanche), **frases prontas** e
 botões de acusar no chat, e **Contar pra turma** (resultado para o WhatsApp).
@@ -40,6 +40,11 @@ Quem sai vira fantasma 👻 (vê tudo e conversa com outros fantasmas). O celula
 **Papéis novos** (opção): 🔦 Seu Lima, o Vigia (vê quem bateu na casa), 🍺 Zé Pinguço (acha que é a Delegada e chuta),
 ⚰️ Seu Bento, o Coveiro (vê o papel de quem sai, no modo segredo) e 💘 Casal apaixonado (se um sai, o outro sai junto).
 **Noites especiais** (opção): 🌕 Lua cheia (capangas atacam duas), 🎉 Festa junina (ninguém sai), 🌫️ Neblina (voto secreto).
+
+## Intruso
+Veio do repositório `Junin12/Intruso` (que agora guarda só o app Android e a loja). Roda em `/intruso/` com servidor
+próprio (`intruso/servidor.js`), perfil próprio e o Passaporte da Vila: cada partida (as rodadas até o placar final) soma XP,
+conquistas, desafio do dia e temporada. O endereço antigo `intruso-eaza.onrender.com` redireciona para cá.
 
 ## Expansões
 Novos moradores/eventos: `public/cara-de-pau/moradores.js`. Novos papéis: `public/ninguem-dorme/papeis.js`.

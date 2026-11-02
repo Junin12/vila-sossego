@@ -295,7 +295,7 @@ const Jogo = {
   id: 'nd', slug: 'ninguem-dorme', nome: 'Ninguém Dorme', emoji: '🌙', voz: true, bots: 6,
   sub: 'Toda noite alguém some na Vila Sossego. De dia, a vila conversa e vota. Descubra os capangas antes que seja tarde!',
   jogadores: 'De 4 a 12 jogadores, cada um no seu celular. O celular de quem cria a sala vira o narrador. Faltou gente? Chame bots.',
-  outro: { href: '../cara-de-pau/', nome: 'Cara de Pau', emoji: '🤥' },
+  outros: [{ href: '../cara-de-pau/', nome: 'Cara de Pau', emoji: '🤥' }, { href: '../intruso/', nome: 'Intruso', emoji: '🕵️' }],
   settings: [
     { key: 'diaSecs', label: 'Tempo de conversa', fmt: (v) => `${v / 60} min` },
     { key: 'noiteSecs', label: 'Duração da noite', fmt: (v) => `${v}s` },

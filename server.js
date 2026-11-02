@@ -1,5 +1,5 @@
 'use strict';
-// Servidor da Vila Sossego: os jogos Cara de Pau e Ninguém Dorme num processo só, sem dependências.
+// Servidor da Vila Sossego: Cara de Pau, Ninguém Dorme e Intruso num processo só, sem dependências.
 // /<jogo>/api/... vai para as salas do jogo; o resto é arquivo estático de public/.
 
 const http = require('http');
@@ -13,6 +13,7 @@ const PUBLIC = path.join(__dirname, 'public');
 const GAMES = {
   'cara-de-pau': createRooms(require('./cara-de-pau/jogo')),
   'ninguem-dorme': createRooms(require('./ninguem-dorme/jogo')),
+  intruso: require('./intruso/servidor'),   // regras próprias (veio do repositório Intruso)
 };
 
 function readJson(req) {

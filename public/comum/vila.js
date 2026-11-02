@@ -456,8 +456,8 @@ const Vila = (() => {
       seasonCard(false),
       h('button', { class: 'btn ghost', type: 'button', 'data-act': 'rules' }, 'Como jogar'),
       h('p', { class: 'hint light center' }, J.jogadores),
-      J.outro ? h('a', { class: 'other', href: J.outro.href }, h('span', { class: 'oe' }, J.outro.emoji),
-        h('span', {}, h('small', {}, 'Também na Vila Sossego'), h('b', {}, J.outro.nome)), icon('send')) : null);
+      (J.outros || []).map((o) => h('a', { class: 'other', href: o.href }, h('span', { class: 'oe' }, o.emoji),
+        h('span', {}, h('small', {}, 'Também na Vila Sossego'), h('b', {}, o.nome)), icon('send'))));
   }
 
   function perfilScreen() {
@@ -476,6 +476,8 @@ const Vila = (() => {
       h('div', { class: 'stats' }, stat(prof.cdp.blefes, 'blefes que colaram'), stat(prof.cdp.duvidasCertas, 'blefes pegos'), stat(prof.cdp.labia, 'vitórias na lábia')),
       h('h2', {}, '🌙 Ninguém Dorme'),
       h('div', { class: 'stats' }, stat(prof.nd.vitVila, 'vitórias da vila'), stat(prof.nd.vitCapanga, 'vitórias de capanga'), stat(prof.nd.votosCertos, 'votos certos')),
+      h('h2', {}, '🕵️ Intruso'),
+      h('div', { class: 'stats' }, stat(prof.int.partidas, 'partidas'), stat(prof.int.vitIntruso, 'rodadas vencidas de intruso'), stat(prof.int.votosCertos, 'vezes que achou o intruso')),
       h('section', { class: 'panel' }, h('h2', {}, 'Conquistas'),
         h('ul', { class: 'achs' }, Perfil.ACH.map((a) => h('li', { class: `ach${prof.ach[a.id] ? ' on' : ''}` },
           h('span', { class: 'achic' }, a.emoji), h('div', {}, h('b', {}, a.name), h('small', {}, a.desc)))))),

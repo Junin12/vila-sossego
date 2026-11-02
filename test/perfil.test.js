@@ -61,6 +61,28 @@ test('perfil antigo/incompleto é completado', () => {
   assert.equal(p.temp.id, '2026-11');
 });
 
+test('Intruso conta no passaporte: XP, estatísticas e conquistas', () => {
+  const p = Perfil.blank();
+  const r = Perfil.onGame(p, { jogo: 'int', won: true, rodadas: 5, intrusoVitorias: 1, votosCertos: 3 }, '2026-11-02');
+  assert.equal(r.xp, Perfil.XP.partida + Perfil.XP.vitoria + 5 * Perfil.XP.rodadaIntruso + Perfil.XP.intrusoVenceu + 3 * Perfil.XP.votoCerto);
+  assert.deepEqual(p.int, { partidas: 1, vitorias: 1, rodadas: 5, vitIntruso: 1, votosCertos: 3 });
+  assert.ok(p.ach.int1);
+  assert.equal(p.nd.votosCertos, 0, 'voto certo do Intruso não conta como capanga');
+  Perfil.onGame(p, { jogo: 'cdp', won: false }, '2026-11-02');
+  Perfil.onGame(p, { jogo: 'nd', won: false, team: 'vila' }, '2026-11-02');
+  assert.ok(p.ach.tres, 'jogou os três');
+  const velho = { xp: 50, nd: { partidas: 2 } };
+  Perfil.touch(velho, '2026-11-02');
+  assert.equal(velho.int.partidas, 0, 'passaporte antigo ganha a parte do Intruso');
+});
+
+test('metas novas não mudam a temporada que já começou', () => {
+  assert.deepEqual(Perfil.temporada('2026-11').metas.map((m) => m.id), ['jogar', 'nd', 'cdp']);
+  for (const mes of ['2027-01', '2027-02', '2027-03', '2027-04', '2027-05']) {
+    assert.equal(new Set(Perfil.temporada(mes).metas.map((m) => m.id)).size, 3);
+  }
+});
+
 test('temporada: 3 metas diferentes por mês, iguais para todos', () => {
   for (const mes of ['2026-11', '2026-12', '2027-01', '2027-06']) {
     const t = Perfil.temporada(mes);

@@ -43,9 +43,12 @@
   // O jogo roda no Render (plano grátis dorme quando ninguém joga). Esta página acorda o servidor e só então entra,
   // mantendo o caminho e o código da sala: wiapps.com.br/vila/ninguem-dorme/?sala=ABCD → …onrender.com/ninguem-dorme/?sala=ABCD
   (function () {
+    // A mesma página serve public_html/vila e public_html/intruso (o Intruso também mora no servidor da Vila).
     var BASE = 'https://vila-sossego.onrender.com';
-    var resto = location.pathname.replace(/^.*?\/vila\/?/i, '/');
-    var destino = BASE + (resto || '/') + location.search;
+    var m = location.pathname.match(/^\/(vila|intruso)(\/.*)?$/i);
+    var intruso = !!m && m[1].toLowerCase() === 'intruso';
+    var destino = BASE + (intruso ? '/intruso' : '') + ((m && m[2]) || '/') + location.search;
+    if (intruso) { document.querySelector('h1').textContent = 'Intruso'; document.title = 'Intruso'; }
     var frases = ['Acordando a vila…', 'O galo já cantou… 🐓', 'Abrindo as janelas… 🪟', 'Passando o café… ☕', 'Varrendo a calçada… 🧹', 'Quase lá! 🏃'];
     var msg = document.getElementById('msg'), bar = document.getElementById('bar');
     var t0 = Date.now(), i = 0, foi = false, avisou = false;

@@ -1,4 +1,4 @@
-# wiapps.com.br/vila: qualquer caminho cai na página "Acordando a vila…" (index.html), que acorda o servidor no Render e entra.
+# wiapps.com.br/vila e /intruso: qualquer caminho cai na página "Acordando a vila…" (index.html), que acorda o servidor no Render e entra.
 DirectoryIndex index.html
 RewriteEngine On
 RewriteCond %{REQUEST_FILENAME} !-f

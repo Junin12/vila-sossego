@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#2E3BD6">
-<meta name="description" content="Vila Sossego: jogos de festa para jogar com a turma, cada um no seu celular. Cara de Pau e Ninguém Dorme.">
+<meta name="description" content="Vila Sossego: jogos de festa para jogar com a turma, cada um no seu celular. Cara de Pau, Ninguém Dorme e Intruso.">
 <meta property="og:title" content="Vila Sossego · jogos de festa">
-<meta property="og:description" content="Cara de Pau (blefe) e Ninguém Dorme (cidade dorme). Cada um no seu celular, de graça.">
+<meta property="og:description" content="Cara de Pau (blefe), Ninguém Dorme (cidade dorme) e Intruso (ache o impostor). Cada um no seu celular, de graça.">
 <title>Vila Sossego</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='4' y='4' width='56' height='56' rx='16' fill='%23FFD23F' stroke='%2317143F' stroke-width='5'/%3E%3Ctext x='32' y='44' font-size='30' text-anchor='middle'%3E%F0%9F%8F%98%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -23,6 +23,7 @@
   .game:active { transform: translateY(5px); box-shadow: 0 2px 0 var(--ink); }
   .game.cdp { background: linear-gradient(160deg, #FFB86B, #F26B3A); }
   .game.nd { background: linear-gradient(160deg, #4A57B8, #1D2459); color: #fff; }
+  .game.int { background: linear-gradient(160deg, #8FE3C4, #1FC98D); }
   .game .gh { display: flex; align-items: center; gap: 12px; }
   .game .ge { display: grid; place-items: center; width: 64px; height: 64px; flex: none; border: 3px solid var(--ink); border-radius: 18px; background: var(--sun); font-size: 2.2rem; transform: rotate(-6deg); }
   .game h2 { color: inherit; font-size: 1.9rem; }
@@ -63,8 +64,14 @@
     <span class="go">Jogar com a turma →</span>
   </a>
   <a class="quickbot" href="ninguem-dorme/?bots=1">🤖 Sem turma? <b>Ninguém Dorme contra bots</b></a>
+  <a class="game int" href="intruso/">
+    <div class="gh"><span class="ge">🕵️</span><div><small>Ache o impostor · 3 a 10 jogadores</small><h2>Intruso</h2></div></div>
+    <p>Todo mundo recebe a mesma palavra secreta, menos o intruso. Dê dicas sem entregar a palavra e descubra quem está blefando.</p>
+    <div class="feats"><span>🗝️ Palavra secreta</span><span>🎭 Palavra parecida</span><span>🤝 Cúmplice</span><span>📱 1 celular só</span><span>✍️ Lista da turma</span></div>
+    <span class="go">Jogar com a turma →</span>
+  </a>
   <section class="panel season-mini" id="temp" hidden></section>
-  <footer>Seu Passaporte da Vila sobe de nível jogando qualquer um dos dois. · Um jogo <b>wiapps</b></footer>
+  <footer>Seu Passaporte da Vila sobe de nível jogando qualquer um dos três. · Um jogo <b>wiapps</b></footer>
 </main>
 <script src="comum/avatars.js"></script>
 <script src="comum/perfil.js"></script>

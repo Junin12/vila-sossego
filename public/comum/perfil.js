@@ -1,8 +1,9 @@
 'use strict';
-// Passaporte da Vila: nível, XP, conquistas, personagens exclusivos e desafio do dia, somando os dois jogos.
+// Passaporte da Vila: nível, XP, conquistas, personagens exclusivos e desafio do dia, somando os três jogos
+// (Cara de Pau, Ninguém Dorme e Intruso).
 // Lógica pura (sem DOM) para ser testável no Node. Fica no aparelho (localStorage): é diversão, não segurança.
 const Perfil = (() => {
-  const XP = { partida: 20, vitoria: 30, blefe: 3, duvidaCerta: 5, labia: 25, votoCerto: 6, sobreviveu: 10, capanga: 15, diario: 60, temporada: 250 };
+  const XP = { partida: 20, vitoria: 30, blefe: 3, duvidaCerta: 5, labia: 25, votoCerto: 6, rodadaIntruso: 4, intrusoVenceu: 12, sobreviveu: 10, capanga: 15, diario: 60, temporada: 250 };
   const TITLES = [[1, 'Forasteiro'], [3, 'Vizinho novo'], [5, 'Morador antigo'], [8, 'Fofoqueiro de plantão'],
     [12, 'Figura da Vila'], [16, 'Lenda de Sossego'], [20, 'Dono da Vila']];
   const needFor = (lvl) => 100 + (lvl - 1) * 50;
@@ -18,6 +19,7 @@ const Perfil = (() => {
     temp: null, temporadas: {},
     cdp: { partidas: 0, vitorias: 0, blefes: 0, duvidasCertas: 0, labia: 0 },
     nd: { partidas: 0, vitorias: 0, vitCapanga: 0, vitVila: 0, sobreviveu: 0, votosCertos: 0, delegadaAcertos: 0 },
+    int: { partidas: 0, vitorias: 0, rodadas: 0, vitIntruso: 0, votosCertos: 0 },
   });
 
   const ACH = [
@@ -37,6 +39,9 @@ const Perfil = (() => {
     ['lv10', '🌟', 'Nível 10', 'Chegue ao nível 10', (p) => levelInfo(p.xp).level >= 10],
     ['daily5', '📅', 'Batendo ponto', 'Complete 5 desafios do dia', (p) => p.dailyDone >= 5],
     ['os2', '🎪', 'Turista completo', 'Jogue os dois jogos da vila', (p) => p.cdp.partidas >= 1 && p.nd.partidas >= 1],
+    ['int1', '🕵️', 'Disfarce perfeito', 'Vença uma rodada do Intruso como intruso', (p) => p.int.vitIntruso >= 1],
+    ['int10', '🔍', 'Olho de lince', 'Ache o intruso 10 vezes', (p) => p.int.votosCertos >= 10],
+    ['tres', '🏡', 'Morador completo', 'Jogue os três jogos da vila', (p) => p.cdp.partidas >= 1 && p.nd.partidas >= 1 && p.int.partidas >= 1],
     ['temp1', '🏅', 'Campeão da temporada', 'Complete todas as metas de uma temporada', (p) => Object.keys(p.temporadas || {}).length >= 1],
   ].map((a) => ({ id: a[0], emoji: a[1], name: a[2], desc: a[3], test: a[4] }));
 
@@ -60,8 +65,10 @@ const Perfil = (() => {
     { id: 'duvido2', text: 'Pegue 2 blefes no Cara de Pau', goal: 2, on: (e) => e.duvidasCertas || 0 },
     { id: 'nd1', text: 'Jogue uma partida de Ninguém Dorme', goal: 1, on: (e) => (e.jogo === 'nd' ? 1 : 0) },
     { id: 'cdp1', text: 'Jogue uma partida de Cara de Pau', goal: 1, on: (e) => (e.jogo === 'cdp' ? 1 : 0) },
-    { id: 'voto2', text: 'Vote certo num capanga 2 vezes', goal: 2, on: (e) => e.votosCertos || 0 },
+    { id: 'voto2', text: 'Vote certo num capanga 2 vezes', goal: 2, on: (e) => (e.jogo === 'nd' ? e.votosCertos || 0 : 0) },
     { id: 'vivo1', text: 'Chegue vivo ao fim do Ninguém Dorme', goal: 1, on: (e) => (e.jogo === 'nd' && e.survived ? 1 : 0) },
+    { id: 'int1', text: 'Jogue uma partida de Intruso', goal: 1, on: (e) => (e.jogo === 'int' ? 1 : 0) },
+    { id: 'achei2', text: 'Ache o intruso 2 vezes', goal: 2, on: (e) => (e.jogo === 'int' ? e.votosCertos || 0 : 0) },
   ];
 
   // Temporada do mês: tema + 3 metas sorteadas pelo mês (iguais para todo mundo). Completar dá XP e um selo.
@@ -77,14 +84,17 @@ const Perfil = (() => {
     { id: 'duvidas', text: 'Pegue 8 blefes no Cara de Pau', goal: 8, on: (e) => e.duvidasCertas || 0 },
     { id: 'vila', text: 'Vença 4 vezes com a vila no Ninguém Dorme', goal: 4, on: (e) => (e.jogo === 'nd' && e.won && e.team !== 'capangas' ? 1 : 0) },
     { id: 'capanga', text: 'Vença 2 vezes como capanga', goal: 2, on: (e) => (e.jogo === 'nd' && e.won && e.team === 'capangas' ? 1 : 0) },
-    { id: 'votos', text: 'Vote certo num capanga 8 vezes', goal: 8, on: (e) => e.votosCertos || 0 },
+    { id: 'votos', text: 'Vote certo num capanga 8 vezes', goal: 8, on: (e) => (e.jogo === 'nd' ? e.votosCertos || 0 : 0) },
     { id: 'nd', text: 'Jogue 6 partidas de Ninguém Dorme', goal: 6, on: (e) => (e.jogo === 'nd' ? 1 : 0) },
     { id: 'cdp', text: 'Jogue 6 partidas de Cara de Pau', goal: 6, on: (e) => (e.jogo === 'cdp' ? 1 : 0) },
+    // metas com `desde` só entram a partir daquele mês (não embaralham uma temporada que já começou)
+    { id: 'int', text: 'Jogue 5 partidas de Intruso', goal: 5, on: (e) => (e.jogo === 'int' ? 1 : 0), desde: '2026-12' },
+    { id: 'disfarce', text: 'Vença 5 rodadas como intruso', goal: 5, on: (e) => e.intrusoVitorias || 0, desde: '2026-12' },
   ];
   const hash = (key) => { let n = 7; for (const ch of key) n = (n * 31 + ch.charCodeAt(0)) >>> 0; return n; };
   function temporada(mes) {
     const [nome, emoji] = TEMAS[mes.slice(5, 7)] || ['Temporada', '⭐'];
-    const pool = METAS.slice();
+    const pool = METAS.filter((m) => !m.desde || mes >= m.desde);
     const metas = [];
     let n = hash(mes);
     for (let i = 0; i < 3; i++) { metas.push(pool.splice(n % pool.length, 1)[0]); n = Math.floor(n / 7) + 13; }
@@ -104,6 +114,7 @@ const Perfil = (() => {
     for (const k of Object.keys(b)) if (p[k] == null) p[k] = b[k];
     p.cdp = Object.assign(b.cdp, p.cdp);
     p.nd = Object.assign(b.nd, p.nd);
+    p.int = Object.assign(b.int, p.int);
     if (p.lastDay !== today) { p.days++; p.lastDay = today; }
     if (!p.daily || p.daily.day !== today) p.daily = { day: today, id: dailyFor(today).id, prog: 0, done: false };
     const mes = today.slice(0, 7);
@@ -113,7 +124,8 @@ const Perfil = (() => {
 
   const snapshot = (p) => JSON.parse(JSON.stringify(p));
 
-  // e = { jogo: 'cdp'|'nd', won, blefes, duvidasCertas, labiaWin, team, survived, votosCertos, delegadaAcertos }
+  // e = { jogo: 'cdp'|'nd'|'int', won, blefes, duvidasCertas, labiaWin, team, survived, votosCertos, delegadaAcertos,
+  //       rodadas, intrusoVitorias }  (no Intruso, uma partida = as rodadas até o placar final)
   function onGame(p, e, today = dayKey()) {
     touch(p, today);
     const before = snapshot(p);
@@ -128,6 +140,14 @@ const Perfil = (() => {
       c.duvidasCertas += e.duvidasCertas || 0;
       gain += (e.blefes || 0) * XP.blefe + (e.duvidasCertas || 0) * XP.duvidaCerta;
       if (e.labiaWin) { c.labia++; gain += XP.labia; }
+    } else if (e.jogo === 'int') {
+      const n = p.int;
+      n.partidas++;
+      if (e.won) n.vitorias++;
+      n.rodadas += e.rodadas || 0;
+      n.vitIntruso += e.intrusoVitorias || 0;
+      n.votosCertos += e.votosCertos || 0;
+      gain += (e.rodadas || 0) * XP.rodadaIntruso + (e.intrusoVitorias || 0) * XP.intrusoVenceu + (e.votosCertos || 0) * XP.votoCerto;
     } else {
       const n = p.nd;
       n.partidas++;

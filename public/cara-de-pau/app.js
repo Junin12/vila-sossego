@@ -202,7 +202,7 @@ const Jogo = {
   id: 'cdp', slug: 'cara-de-pau', nome: 'Cara de Pau', emoji: '🤥', bots: 3,
   sub: 'Todo mundo na vila esconde dois segredos. Minta com cara de pau, ou grite "Duvido!" e desmascare os outros.',
   jogadores: 'De 2 a 6 jogadores, cada um no seu celular. Sem turma? Jogue contra bots.',
-  outro: { href: '../ninguem-dorme/', nome: 'Ninguém Dorme', emoji: '🌙' },
+  outros: [{ href: '../ninguem-dorme/', nome: 'Ninguém Dorme', emoji: '🌙' }, { href: '../intruso/', nome: 'Intruso', emoji: '🕵️' }],
   settings: [
     { key: 'labia', label: 'Vitória na lábia', fmt: (v) => (v ? `${v} blefes` : 'Desligada'),
       hint: (v) => (v ? `Quem passar ${v} blefes sem ser pego pode declarar vitória.` : 'Só vence o último que sobrar.') },
