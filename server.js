@@ -6,15 +6,18 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { createRooms, GameError } = require('./salas');
+const festa = require('./festa');
 
 const PORT = process.env.PORT || Number(process.argv[2]) || 3000;
 const PUBLIC = path.join(__dirname, 'public');
 
 const GAMES = {
-  'cara-de-pau': createRooms(require('./cara-de-pau/jogo')),
-  'ninguem-dorme': createRooms(require('./ninguem-dorme/jogo')),
+  'cara-de-pau': createRooms(require('./cara-de-pau/jogo'), { slug: 'cara-de-pau', festa }),
+  'ninguem-dorme': createRooms(require('./ninguem-dorme/jogo'), { slug: 'ninguem-dorme', festa }),
   intruso: require('./intruso/servidor'),   // regras próprias (veio do repositório Intruso)
 };
+GAMES.intruso.ligarFesta(festa);
+for (const [slug, g] of Object.entries(GAMES)) festa.registrarJogo(slug, g.abrir);
 
 function readJson(req) {
   return new Promise((resolve, reject) => {
@@ -22,7 +25,8 @@ function readJson(req) {
     const chunks = [];
     req.on('data', (c) => {
       size += c.length;
-      if (size > 4096) { reject(new GameError('Requisição grande demais.')); req.destroy(); return; }
+      // a selfie (JPEG pequeno em base64) é o maior pedido
+      if (size > 20000) { reject(new GameError('Requisição grande demais.')); req.destroy(); return; }
       chunks.push(c);
     });
     req.on('end', () => {
@@ -55,6 +59,13 @@ const server = http.createServer((req, res) => {
     return;
   }
   if (url.pathname === '/healthz') { res.writeHead(200); res.end('ok'); return; }
+  // telão: descobre de qual jogo é a sala pelo código
+  if (url.pathname === '/api/onde') {
+    const code = String(url.searchParams.get('code') || '').trim().toUpperCase();
+    const slug = Object.keys(GAMES).find((k) => GAMES[k].rooms.has(code));
+    send(res, slug ? 200 : 404, slug ? { slug, code } : { error: 'Sala não encontrada. Confira o código.' });
+    return;
+  }
   // /cara-de-pau sem barra → com barra (os caminhos da página são relativos)
   if (GAMES[url.pathname.slice(1)]) { res.writeHead(301, { Location: url.pathname + '/' + url.search }); res.end(); return; }
   let rel = decodeURIComponent(url.pathname).replace(/^\/+/, '');

@@ -5,8 +5,11 @@
 //   wait(room) → { key, ids, secs } | null, timeout(room), winners(room) → [pid] | null,
 //   bot(room, pid) → move | null, botDelay(room, pid) → ms, botLine?(room, pid) → texto | null,
 //   chat(room, pid) → canal | null, canSee(room, pid, canal) → bool, RuleError.
+// Opcionais: participants(room) → [pid] da partida, onEnd(room, vencedores), custom(room, player, body) → ações próprias.
+// Comum a todos: Modo Família (settings.familia), Telão (/api/tv), Noite de Festa (festa.js), prendas e foto no lugar do personagem.
 
 const crypto = require('crypto');
+const PRENDAS = require('./public/comum/prendas');
 
 class GameError extends Error {}
 const fail = (msg) => { throw new GameError(msg); };
@@ -19,6 +22,7 @@ const CODE_LETTERS = 'ABCDEFGHJKLMNPQRSTUVXZ';
 const EMOJIS = ['😂', '😱', '🤨', '🔥', '👀', '🤥'];
 const AVATAR_BASE = 12;
 const AVATAR_TOTAL = 20;   // deve bater com public/comum/avatars.js
+const FOTO_MAX = 12000;    // bytes do JPEG da selfie (a tela manda 96x96); fica só na memória, some com a sala
 const BOT_NAMES = ['Zé Bot', 'Dona Bitinha', 'Robertão', 'Lurdinha', 'Tião', 'Cida', 'Nestor', 'Jurema', 'Valdisney', 'Creusa', 'Genivaldo', 'Neusinha'];
 
 const newId = () => crypto.randomBytes(8).toString('hex');
@@ -26,10 +30,14 @@ const clean = (s, max) => String(s == null ? '' : s).replace(/\s+/g, ' ').trim()
 const norm = (s) => clean(s, 60).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 const rint = (n) => crypto.randomInt(n);
 
-function createRooms(G) {
+function createRooms(G, ctx = {}) {
   const rooms = new Map();
+  const festa = ctx.festa || null;
+  const OPTIONS = { ...G.options, familia: [0, 1] };
+  const DEFAULTS = { ...G.defaults, familia: 0 };
   const findPlayer = (room, pid) => room.players.find((p) => p.id === pid);
   const online = (p) => p.bot || !!p.res;
+  const rint2 = (n) => crypto.randomInt(n);
   const connected = (room) => room.players.filter((p) => !p.bot && p.res);
 
   function newCode() {
@@ -59,16 +67,17 @@ function createRooms(G) {
   }
 
   function makeRoom(host) {
-    return { code: newCode(), hostId: host.id, players: [host], phase: 'lobby', settings: { ...G.defaults }, g: null, round: 0,
+    return { code: newCode(), hostId: host.id, players: [host], phase: 'lobby', settings: { ...DEFAULTS }, g: null, round: 0,
       deadline: 0, total: 0, timer: null, armKey: '', botKeys: new Set(), botTimers: [], chat: [], reactions: [], seq: 0,
-      counted: false, lastActive: Date.now() };
+      counted: false, lastActive: Date.now(), tvs: new Set(), festa: null, prenda: null, next: null, ultimos: [] };
   }
 
   function view(room, pid) {
     const me = findPlayer(room, pid);
     const v = {
-      code: room.code, you: pid, hostId: room.hostId, phase: room.phase, settings: room.settings, options: G.options,
-      min: G.min, max: G.max, emojis: EMOJIS, round: room.round,
+      code: room.code, you: pid, hostId: room.hostId, phase: room.phase, settings: room.settings, options: OPTIONS,
+      min: G.min, max: G.max, emojis: EMOJIS, round: room.round, tv: room.tvs.size > 0,
+      festa: festa && room.festa ? festa.resumo(festa.get(room.festa)) : null, prenda: room.prenda, next: room.next,
       players: room.players.map((p) => ({ id: p.id, name: p.name, avatar: p.avatar, bot: p.bot, wins: p.wins, online: online(p), pp: p.pp })),
       leftMs: room.deadline ? Math.max(0, room.deadline - Date.now()) : 0, totalMs: room.total,
       reactions: room.reactions,
@@ -88,6 +97,10 @@ function createRooms(G) {
   function broadcast(room) {
     room.lastActive = Date.now();
     for (const p of room.players) if (!p.bot) push(p, view(room, p.id));
+    if (room.tvs.size) {   // telão: só o que é público
+      const data = `data: ${JSON.stringify(view(room, null))}\n\n`;
+      for (const res of room.tvs) res.write(data);
+    }
   }
 
   function clearBots(room) {
@@ -147,6 +160,13 @@ function createRooms(G) {
       if (ws) {
         room.counted = true;
         for (const id of ws) { const p = findPlayer(room, id); if (p) p.wins += 1; }
+        const ids = G.participants ? G.participants(room) : room.players.map((p) => p.id);
+        room.ultimos = ids.map((id) => findPlayer(room, id)).filter(Boolean).map((p) => ({ name: p.name, avatar: p.avatar, bot: p.bot, venceu: ws.includes(p.id) }));
+        if (G.onEnd) G.onEnd(room, ws);
+        if (festa && room.festa) {
+          const f = festa.registrar(room.festa, ctx.slug, room.ultimos);
+          if (f && f.prenda) room.prenda = { ...f.prenda };
+        }
       }
     }
     arm(room);
@@ -162,7 +182,7 @@ function createRooms(G) {
     room.players = room.players.filter((p) => p !== player);
     clearTimeout(player.timer);
     if (player.res) { player.res.end(); player.res = null; }
-    if (!room.players.some((p) => !p.bot)) { clearTimeout(room.timer); clearBots(room); rooms.delete(room.code); return; }
+    if (!room.players.some((p) => !p.bot)) { clearTimeout(room.timer); clearBots(room); for (const r of room.tvs) r.end(); rooms.delete(room.code); return; }
     if (room.hostId === player.id) room.hostId = (connected(room)[0] || room.players.find((p) => !p.bot)).id;
   }
 
@@ -177,7 +197,7 @@ function createRooms(G) {
       case 'setting': {
         if (!isHost) fail('Só quem criou a sala muda as regras.');
         if (!lobby) fail('Mude as regras antes de começar.');
-        const opts = G.options[body.key];
+        const opts = OPTIONS[body.key];
         if (!opts || !opts.includes(body.value)) fail('Opção inválida.');
         room.settings[body.key] = body.value;
         return;
@@ -188,6 +208,7 @@ function createRooms(G) {
         if (!Number.isInteger(want) || want < 0 || want >= AVATAR_TOTAL) fail('Personagem inválido.');
         if (room.players.some((p) => p !== player && p.avatar === want)) fail('Esse personagem já foi escolhido.');
         player.avatar = want;
+        player.foto = null;
         return;
       }
       case 'addBot': {
@@ -215,6 +236,8 @@ function createRooms(G) {
         try { G.start(room); } catch (e) { if (e instanceof G.RuleError) fail(e.message); throw e; }
         room.round += 1;
         room.counted = false;
+        room.prenda = null;
+        room.next = null;
         room.reactions = [];
         room.chat = room.chat.filter((m) => m.ch === 'sala').slice(-10);
         room.phase = 'game';
@@ -261,6 +284,46 @@ function createRooms(G) {
         }
         return;
       }
+      case 'festa': {   // liga/desliga a Noite de Festa nesta sala
+        if (!festa) fail('Noite de Festa indisponível.');
+        if (!isHost) fail('Só quem criou a sala liga a Noite de Festa.');
+        if (!lobby) fail('Ligue a Noite de Festa entre as partidas.');
+        room.festa = room.festa ? null : festa.criar(room.settings.familia).id;
+        return;
+      }
+      case 'proximo': {   // Noite de Festa: abre o próximo jogo e leva a turma junto
+        if (!festa || !room.festa) fail('Ligue a Noite de Festa primeiro.');
+        if (!isHost) fail('Só quem criou a sala escolhe o próximo jogo.');
+        if (!lobby) fail('Termine a partida primeiro.');
+        let out;
+        try { out = festa.proximo(room.festa, String(body.jogo || ''), { name: player.name, avatar: typeof player.avatar === 'number' ? player.avatar : 0, pp: player.pp }); }
+        catch (e) { if (e instanceof GameError) throw e; fail(e.message); }
+        room.next = { slug: String(body.jogo), code: out.code };
+        return { ...out, slug: room.next.slug };
+      }
+      case 'prenda': {   // sorteia uma prenda para quem perdeu a última partida
+        if (!lobby || !room.ultimos.length) fail('A prenda sai no fim da partida.');
+        const perdedores = room.ultimos.filter((r) => !r.venceu && !r.bot);
+        if (!perdedores.length) fail('Ninguém perdeu… sem prenda dessa vez! 🎉');
+        const fam = festa && room.festa ? festa.get(room.festa).familia : !!room.settings.familia;
+        room.prenda = { para: perdedores[rint2(perdedores.length)].name, texto: PRENDAS.sortear(fam, rint2), n: ++room.seq };
+        return;
+      }
+      case 'foto': {   // selfie no lugar do personagem (só nesta sala, só na memória)
+        if (!lobby) fail('Troque a foto no saguão.');
+        if (body.data == null) { player.foto = null; if (typeof player.avatar !== 'number') player.avatar = pickAvatar(room); return; }
+        const m = /^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/.exec(String(body.data));
+        const buf = m ? Buffer.from(m[1], 'base64') : null;
+        if (!buf || buf.length > FOTO_MAX || buf[0] !== 0xff || buf[1] !== 0xd8) fail('Foto inválida.');
+        player.foto = buf;
+        player.fotoV = (player.fotoV || 0) + 1;
+        player.avatar = `f:${player.id}:${player.fotoV}`;
+        return;
+      }
+      case 'custom': {
+        if (!G.custom) fail('Ação desconhecida.');
+        return G.custom(room, player, body);
+      }
       case 'move': {
         if (room.phase !== 'game' || !room.g) fail('A partida não começou.');
         try { G.move(room, player.id, body.move || {}); }
@@ -299,6 +362,25 @@ function createRooms(G) {
 
   // sub = caminho depois de /<jogo>/api
   async function handle(req, res, url, sub, readJson) {
+    if (req.method === 'GET' && sub === '/tv') {   // telão: assiste a sala sem ser jogador
+      const room = rooms.get(String(url.searchParams.get('code') || '').trim().toUpperCase());
+      if (!room) fail('Sala não encontrada.');
+      res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
+      res.write('retry: 3000\n\n');
+      room.tvs.add(res);
+      const beat = setInterval(() => res.write(': ping\n\n'), 20000);
+      req.on('close', () => { clearInterval(beat); room.tvs.delete(res); if (rooms.has(room.code)) broadcast(room); });
+      broadcast(room);
+      return null;
+    }
+    if (req.method === 'GET' && sub === '/foto') {
+      const room = rooms.get(String(url.searchParams.get('code') || '').toUpperCase());
+      const p = room && findPlayer(room, url.searchParams.get('id'));
+      if (!p || !p.foto) fail('Sala não encontrada.');
+      res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, max-age=86400', 'X-Content-Type-Options': 'nosniff' });
+      res.end(p.foto);
+      return null;
+    }
     if (req.method === 'GET' && sub === '/events') {
       const { room, player } = lookup(url.searchParams.get('code'), url.searchParams.get('pid'));
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
@@ -340,9 +422,9 @@ function createRooms(G) {
     }
     if (sub === '/act') {
       const { room, player } = lookup(body.code, body.pid);
-      act(room, player, body);
+      const out = act(room, player, body);
       if (rooms.has(room.code)) settle(room);
-      return { ok: true };
+      return out && typeof out === 'object' ? out : { ok: true };
     }
     fail('Rota inexistente.');
     return null;
@@ -354,7 +436,20 @@ function createRooms(G) {
     }
   }, 5 * 60 * 1000).unref();
 
-  return { handle, rooms };
+  // Noite de Festa: abre uma sala deste jogo já com o anfitrião, ligada à festa
+  function abrir(host, festaId) {
+    if (rooms.size >= MAX_ROOMS) fail('Servidor cheio, tente em instantes.');
+    const player = makePlayer(clean(host.name, 14) || 'Anfitrião', pickAvatar(null, Number(host.avatar)), false, validPp(host.pp));
+    const room = makeRoom(player);
+    if (!room.code) fail('Não foi possível criar a sala.');
+    room.festa = festaId;
+    const f = festa && festa.get(festaId);
+    if (f) room.settings.familia = f.familia ? 1 : 0;
+    rooms.set(room.code, room);
+    return { code: room.code, pid: player.id };
+  }
+
+  return { handle, rooms, abrir };
 }
 
 module.exports = { createRooms, GameError };
