@@ -189,6 +189,7 @@ function resolverVotos(g) {
   const { max, top } = maisVotado(g, conta);
   const expulso = top.length === 1 && max > pular ? P(g, top[0]) : null;
   const saudade = expulso ? tirar(g, expulso) : null;
+  g.ultimas = null;
   g.veredito = { dia: g.dia, expulso: expulso ? expulso.id : null, papel: expulso && g.revelar ? expulso.papel : null,
     empate: top.length > 1 && max > pular, votos: { ...g.votos },
     saudade: saudade ? saudade.id : null, papelSaudade: saudade && g.revelar ? saudade.papel : null };
@@ -271,10 +272,11 @@ function timeout(g) {
 // O Zé Pinguço se vê como Delegada até o fim (ou até sair da vila).
 const papelPara = (g, p, pid) => (p.papel === 'bebado' && p.id === pid && p.vivo && g.fase !== 'fim' ? PAPEIS.bebado.finge : p.papel);
 
-function viewFor(g, pid) {
+// opts.narrador: o narrador humano vê tudo (papéis, quem escolheu quem à noite) para conduzir a mesa.
+function viewFor(g, pid, opts = {}) {
   const me = P(g, pid);
   const fim = g.fase === 'fim';
-  const fantasma = !!(me && !me.vivo);
+  const fantasma = !!(me && !me.vivo) || !!opts.narrador;
   const souCap = !!(me && isCap(me));
   const coveiro = !!(me && me.papel === 'coveiro');
   const noCasal = !!(me && g.casal && g.casal.includes(pid));
@@ -282,14 +284,15 @@ function viewFor(g, pid) {
   const secreto = g.fase === 'votacao' && g.votoSecreto;
   const v = {
     fase: g.fase, noite: g.noite, dia: g.dia, waiting: waiting(g), vencedor: g.vencedor, revelar: g.revelar,
-    anuncio: g.anuncio, log: g.log, especial: g.especial, votoSecreto: secreto,
+    anuncio: g.anuncio, log: g.log, especial: g.especial, votoSecreto: secreto && !opts.narrador,
+    ultimas: g.fase === 'veredito' || fim ? g.ultimas || null : null,
     casal: fim || fantasma ? g.casal : noCasal ? g.casal : null,
     players: g.players.map((p) => ({
       id: p.id, vivo: p.vivo, papel: verPapel(p) ? papelPara(g, p, pid) : null, pronto: p.pronto,
       votou: g.fase === 'votacao' ? p.id in g.votos : false,
       stats: fim ? p.stats : null,
     })),
-    votos: g.fase === 'votacao' ? (secreto ? (g.votos[pid] ? { [pid]: g.votos[pid] } : {}) : g.votos) : null,
+    votos: g.fase === 'votacao' ? (secreto && !opts.narrador ? (g.votos[pid] ? { [pid]: g.votos[pid] } : {}) : g.votos) : null,
     veredito: g.veredito && (g.fase === 'veredito' || fim) ? g.veredito : null,
   };
   // modo segredo: só fantasmas e o Coveiro sabem quem era quem saiu
@@ -299,6 +302,9 @@ function viewFor(g, pid) {
     const real = (id) => (id ? P(g, id).papel : null);
     v.anuncio = { ...g.anuncio, papel: real(g.anuncio.sumiu), papel2: real(g.anuncio.sumiu2), papelSaudade: real(g.anuncio.saudade) };
     if (v.veredito) v.veredito = { ...v.veredito, papel: real(v.veredito.expulso), papelSaudade: real(v.veredito.saudade) };
+  }
+  if (opts.narrador) {
+    v.narr = { acoes: g.fase === 'noite' ? { ...g.acoes } : null, acoes2: g.fase === 'noite' ? { ...g.acoes2 } : null, priv: g.priv, casal: g.casal };
   }
   if (me) {
     const papel = papelPara(g, me, pid);

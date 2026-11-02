@@ -144,6 +144,52 @@ async function main() {
     sse.destroy();
   });
 
+  await test('Cara de Pau: torneio de 3 partidas e cartas da casa', async () => {
+    const { body: { code, pid } } = await post('/cara-de-pau/api/create', { name: 'Edu', bots: 2 });
+    const act = (b) => post('/cara-de-pau/api/act', { code, pid, ...b });
+    const room = GAMES['cara-de-pau'].rooms.get(code);
+    assert.equal((await act({ type: 'custom', acao: 'apelido', carta: 'prefeito', nome: 'Tio Zé' })).status, 200);
+    assert.equal((await act({ type: 'custom', acao: 'apelido', carta: 'nada', nome: 'X' })).status, 400);
+    assert.equal(room.apelidos.prefeito, 'Tio Zé');
+    await act({ type: 'setting', key: 'torneio', value: 1 });
+    for (let i = 0; i < 3; i++) {
+      assert.equal((await act({ type: 'start' })).status, 200);
+      assert.ok(await ate(() => room.counted), `partida ${i + 1} do torneio`);
+    }
+    assert.ok(room.serie.fim, 'torneio terminou');
+    assert.ok(room.serie.campeao, 'tem campeão');
+    assert.equal((await primeira(`/cara-de-pau/api/tv?code=${code}`)).extra.apelidos.prefeito, 'Tio Zé');
+    await act({ type: 'start' });
+    assert.equal(room.serie.n, 0, 'torneio novo começou');
+  });
+
+  await test('Ninguém Dorme: narrador humano não joga e vê tudo; expulso deixa últimas palavras', async () => {
+    const { body: { code, pid } } = await post('/ninguem-dorme/api/create', { name: 'Nara', bots: 3 });
+    const act = (b) => post('/ninguem-dorme/api/act', { code, pid, ...b });
+    await act({ type: 'setting', key: 'narrador', value: 1 });
+    const r = await act({ type: 'start' });
+    assert.equal(r.status, 400, 'com narrador precisa de 5');
+    assert.match(r.body.error, /narrador/);
+    await act({ type: 'addBot' });
+    assert.equal((await act({ type: 'start' })).status, 200);
+    const room = GAMES['ninguem-dorme'].rooms.get(code);
+    assert.ok(!room.g.players.some((p) => p.id === pid), 'narrador fora dos papéis');
+    const ND = require('../ninguem-dorme/jogo');
+    const v = ND.view(room, pid);
+    assert.ok(v.players.every((p) => p.papel), 'narrador vê todos os papéis');
+    assert.ok(v.narr, 'roteiro do narrador');
+    // força uma expulsão de bot e confere o recado automático
+    const L = require('../ninguem-dorme/logica');
+    const g = room.g;
+    g.fase = 'votacao'; g.votos = {};
+    const alvo = g.players.find((p) => !L.isCap(p)) || g.players[0];
+    for (const p of g.players.filter((x) => x.vivo && x.id !== alvo.id)) ND.move(room, p.id, { t: 'voto', alvo: alvo.id });
+    if (g.fase === 'votacao') ND.move(room, alvo.id, { t: 'voto', alvo: 'pular' });
+    assert.equal(g.veredito.expulso, alvo.id);
+    assert.ok(g.ultimas && g.ultimas.pid === alvo.id, 'bot expulso deixou recado');
+    assert.throws(() => ND.move(room, alvo.id, { t: 'ultimas', text: 'de novo' }), /já deixou/);
+  });
+
   server.close();
   if (server.closeAllConnections) server.closeAllConnections();
   console.log(`Festa, telão e novidades: ${passed} testes passaram`);

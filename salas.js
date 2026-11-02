@@ -83,6 +83,7 @@ function createRooms(G, ctx = {}) {
       reactions: room.reactions,
       chat: room.chat.filter((m) => m.ch === 'sala' || (room.phase === 'game' && room.g && G.canSee(room, pid, m.ch))),
     };
+    if (G.extra) v.extra = G.extra(room);   // dados do jogo que valem também no saguão (ex.: cartas da casa)
     if (room.phase === 'game' && room.g) {
       v.game = G.view(room, pid);
       v.chatCh = me ? G.chat(room, pid) : null;
@@ -322,7 +323,7 @@ function createRooms(G, ctx = {}) {
       }
       case 'custom': {
         if (!G.custom) fail('Ação desconhecida.');
-        return G.custom(room, player, body);
+        try { return G.custom(room, player, body); } catch (e) { if (e instanceof G.RuleError) fail(e.message); throw e; }
       }
       case 'move': {
         if (room.phase !== 'game' || !room.g) fail('A partida não começou.');

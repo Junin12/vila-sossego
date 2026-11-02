@@ -9,8 +9,18 @@ const rnd = (n) => crypto.randomInt(n);
 const chance = (pct) => rnd(100) < pct;
 const pickOne = (arr) => arr[rnd(arr.length)];
 
-const OPTIONS = { diaSecs: [60, 120, 180, 300], noiteSecs: [30, 45, 60], revelar: [1, 0], extras: [1, 0], especiais: [1, 0] };
-const DEFAULTS = { diaSecs: 120, noiteSecs: 45, revelar: 1, extras: 1, especiais: 1 };
+const OPTIONS = { diaSecs: [60, 120, 180, 300], noiteSecs: [30, 45, 60], revelar: [1, 0], extras: [1, 0], especiais: [1, 0], narrador: [0, 1] };
+const DEFAULTS = { diaSecs: 120, noiteSecs: 45, revelar: 1, extras: 1, especiais: 1, narrador: 0 };
+const ULTIMAS_BOT = ['Vocês vão se arrepender! 😤', 'Eu era inocente… cuidem da vila. 🥲', 'Fiquem de olho em quem votou primeiro! 👀',
+  'Tudo bem… mas o verdadeiro capanga está rindo agora. 😏', 'Adeus, Vila Sossego! 👋'];
+const limpa = (s, max) => String(s == null ? '' : s).replace(/\s+/g, ' ').trim().slice(0, max);
+// expulso que é bot deixa as últimas palavras sozinho
+function ultimasDoBot(room) {
+  const g = room.g;
+  if (g.fase !== 'veredito' || g.ultimas || !g.veredito || !g.veredito.expulso) return;
+  const quem = room.players.find((p) => p.id === g.veredito.expulso);
+  if (quem && quem.bot) g.ultimas = { pid: quem.id, text: pickOne(ULTIMAS_BOT) };
+}
 const FESTA_SECS = 7;
 const AMANHECER_SECS = 9;
 const VOTACAO_SECS = 40;
@@ -130,11 +140,24 @@ module.exports = {
   id: 'ninguem-dorme', min: MIN, max: MAX, options: OPTIONS, defaults: DEFAULTS, RuleError: L.RuleError,
   start(room) {
     const s = room.settings;
-    room.g = L.newGame(room.players.map((p) => p.id), { revelar: !!s.revelar, extras: !!s.extras, especiais: !!s.especiais, rnd });
+    // narrador humano: quem criou a sala conduz a mesa e não joga
+    room.narrador = s.narrador ? room.hostId : null;
+    const ids = room.players.map((p) => p.id).filter((id) => id !== room.narrador);
+    if (room.narrador && ids.length < MIN) throw new L.RuleError(`Com narrador, precisa de ${MIN + 1} pessoas (o narrador não joga). Chame bots!`);
+    room.g = L.newGame(ids, { revelar: !!s.revelar, extras: !!s.extras, especiais: !!s.especiais, rnd });
   },
   move(room, pid, m) {
     const g = room.g;
+    if (m && m.t === 'ultimas') {   // quem foi expulso tem uns segundos para um recado final
+      if (g.fase !== 'veredito' || !g.veredito || g.veredito.expulso !== pid) throw new L.RuleError('Agora não é hora de últimas palavras.');
+      if (g.ultimas) throw new L.RuleError('Você já deixou seu recado.');
+      const text = limpa(m.text, 90);
+      if (!text) throw new L.RuleError('Escreva seu recado.');
+      g.ultimas = { pid, text };
+      return;
+    }
     L.act(g, pid, m);
+    ultimasDoBot(room);
     // todos os humanos prontos para votar: os bots não seguram a conversa
     if (g.fase === 'dia') {
       const bot = (id) => (room.players.find((x) => x.id === id) || {}).bot;
@@ -144,16 +167,18 @@ module.exports = {
       }
     }
   },
-  view(room, pid) { return L.viewFor(room.g, pid); },
+  view(room, pid) { return L.viewFor(room.g, pid, { narrador: !!pid && pid === room.narrador }); },
+  participants(room) { return room.g.players.map((p) => p.id); },
   inGame(room, pid) { const p = L.P(room.g, pid); return !!p && p.vivo; },
   wait(room) {
     const g = room.g;
     if (g.fase === 'fim') return null;
     const s = room.settings;
-    const secs = { noite: g.especial === 'festa' ? FESTA_SECS : s.noiteSecs, amanhecer: AMANHECER_SECS, dia: s.diaSecs, votacao: VOTACAO_SECS, veredito: VEREDITO_SECS }[g.fase];
+    const secs = { noite: g.especial === 'festa' ? FESTA_SECS : s.noiteSecs, amanhecer: AMANHECER_SECS, dia: s.diaSecs, votacao: VOTACAO_SECS,
+      veredito: g.veredito && g.veredito.expulso ? VEREDITO_SECS + 4 : VEREDITO_SECS }[g.fase];   // +4s para as últimas palavras
     return { key: `${room.round}|${g.fase}|${g.noite}|${g.dia}`, ids: L.waiting(g), secs };
   },
-  timeout(room) { L.timeout(room.g); },
+  timeout(room) { L.timeout(room.g); ultimasDoBot(room); },
   winners(room) {
     const g = room.g;
     if (!g || g.fase !== 'fim') return null;
@@ -163,6 +188,7 @@ module.exports = {
   chat(room, pid) {
     const g = room.g;
     const p = L.P(g, pid);
+    if (pid && pid === room.narrador) return g.fase === 'noite' ? null : 'sala';   // narrador não cochicha à noite
     if (!p || g.fase === 'fim') return 'sala';
     if (!p.vivo) return 'fantasmas';
     if (g.fase === 'noite') return L.isCap(p) ? 'capangas' : null;

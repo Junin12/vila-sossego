@@ -9,8 +9,11 @@ const rnd = (n) => crypto.randomInt(n);
 const chance = (pct) => rnd(100) < pct;
 const pickOne = (arr) => arr[rnd(arr.length)];
 
-const OPTIONS = { labia: [0, 3, 4, 5], reactSecs: [8, 12, 20], eventos: [0, 1], feira: [0, 1], cartas: [2, 1], duplas: [0, 1] };
-const DEFAULTS = { labia: 4, reactSecs: 12, eventos: 1, feira: 1, cartas: 2, duplas: 0 };
+const OPTIONS = { labia: [0, 3, 4, 5], reactSecs: [8, 12, 20], eventos: [0, 1], feira: [0, 1], cartas: [2, 1], duplas: [0, 1], torneio: [0, 1] };
+const DEFAULTS = { labia: 4, reactSecs: 12, eventos: 1, feira: 1, cartas: 2, duplas: 0, torneio: 0 };
+const TORNEIO_JOGOS = 3;
+const { MORADORES } = require('../public/cara-de-pau/moradores');
+const limpa = (s, max) => String(s == null ? '' : s).replace(/\s+/g, ' ').trim().slice(0, max);
 const TURN_SECS = 45;
 const LOSE_SECS = 20;
 const VALUE = { fofoqueira: 5, prefeito: 4, feirante: 3, benzedeira: 3, delegada: 3, padre: 2, agiota: 2 };   // o que o bot prefere guardar
@@ -107,10 +110,40 @@ module.exports = {
   id: 'cara-de-pau', min: 2, max: 6, options: OPTIONS, defaults: DEFAULTS, RuleError: L.RuleError,
   start(room) {
     const s = room.settings;
+    // torneio de família: série de 3 partidas; começa outra quando a anterior acabou
+    if (!s.torneio) room.serie = null;
+    else if (!room.serie || room.serie.fim) room.serie = { n: 0, total: TORNEIO_JOGOS, pontos: {}, blefes: {}, fim: false, campeao: null };
     room.g = L.newGame(room.players.map((p) => p.id), { labia: s.labia, eventos: !!s.eventos, feira: !!s.feira, cartas: s.cartas, duplas: !!s.duplas, rnd });
   },
   move(room, pid, m) { L.act(room.g, pid, m); },
-  view(room, pid) { return L.viewFor(room.g, pid); },
+  view(room, pid) { return { ...L.viewFor(room.g, pid), serie: room.serie || null }; },
+  extra(room) { return { apelidos: room.apelidos || {}, serie: room.serie || null }; },
+  participants(room) { return room.g.players.map((p) => p.id); },
+  onEnd(room, ws) {
+    const se = room.serie;
+    if (!se || se.fim) return;
+    se.n += 1;
+    for (const p of room.g.players) {
+      se.pontos[p.id] = (se.pontos[p.id] || 0) + (ws.includes(p.id) ? 1 : 0);
+      se.blefes[p.id] = (se.blefes[p.id] || 0) + p.stats.blefes;
+    }
+    if (se.n >= se.total) {
+      se.fim = true;
+      const ids = Object.keys(se.pontos).sort((a, b) => se.pontos[b] - se.pontos[a] || se.blefes[b] - se.blefes[a]);
+      se.campeao = ids[0] || null;
+    }
+  },
+  // cartas da casa: a família dá nome a um morador ("Tio Zé, o Churrasqueiro"); a ação continua a mesma
+  custom(room, player, body) {
+    if (body.acao !== 'apelido') throw new L.RuleError('Ação desconhecida.');
+    if (player.id !== room.hostId) throw new L.RuleError('Só quem criou a sala dá nome às cartas.');
+    if (room.phase === 'game' && room.g && room.g.phase !== 'end') throw new L.RuleError('Mude as cartas entre as partidas.');
+    if (!MORADORES[body.carta]) throw new L.RuleError('Carta inválida.');
+    const nome = limpa(body.nome, 16);
+    room.apelidos = room.apelidos || {};
+    if (nome) room.apelidos[body.carta] = nome; else delete room.apelidos[body.carta];
+    return null;
+  },
   inGame(room, pid) { const p = P(room.g, pid); return !!p && !p.out; },
   wait(room) {
     const g = room.g;
