@@ -37,31 +37,41 @@ const Momentos = (() => {
       { dur: 2.6, desenha: (t, tt) => { avatares(x, imgs, t); texto(x, d.destaque, 64, 860, '#FFD23F', t); confete(x, tt); } },
       { dur: 1.6, desenha: (t) => { texto(x, 'Bora jogar?', 70, 560, '#fff', t); texto(x, 'wiapps.com.br/vila', 46, 660, '#FFD23F', t); } },
     ];
-    const stream = c.captureStream(FPS);
-    const mime = tipo();
-    const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 2500000 });
-    const partes = [];
-    rec.ondataavailable = (e) => { if (e.data.size) partes.push(e.data); };
-    const fim = new Promise((r) => { rec.onstop = r; });
-    rec.start();
     const total = cenas.reduce((a, s) => a + s.dur, 0);
-    const t0 = performance.now();
-    await new Promise((resolve) => {
-      function quadro() {
-        const tt = (performance.now() - t0) / 1000;
-        if (tt >= total) { resolve(); return; }
-        let acc = 0, cena = cenas[0];
-        for (const s of cenas) { if (tt < acc + s.dur) { cena = s; break; } acc += s.dur; }
-        fundo(x, d);
-        cena.desenha((tt - acc) / Math.min(0.5, cena.dur), tt);
-        setTimeout(quadro, 1000 / FPS);   // não usa requestAnimationFrame: ele pausa com o app em segundo plano
-      }
-      quadro();
-    });
-    rec.stop();
-    await fim;
+    // grava num formato; se o aparelho devolver vídeo vazio (alguns não gravam MP4), tenta WebM
+    async function gravar(mime) {
+      const stream = c.captureStream(0);   // quadro a quadro (requestFrame): grava mesmo com a tela em segundo plano
+      const trilha = stream.getVideoTracks()[0];
+      const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 2500000 });
+      const partes = [];
+      rec.ondataavailable = (e) => { if (e.data.size) partes.push(e.data); };
+      const fim = new Promise((r) => { rec.onstop = r; });
+      rec.start(250);
+      const t0 = performance.now();
+      await new Promise((resolve) => {
+        function quadro() {
+          const tt = (performance.now() - t0) / 1000;
+          if (tt >= total) { resolve(); return; }
+          let acc = 0, cena = cenas[0];
+          for (const s of cenas) { if (tt < acc + s.dur) { cena = s; break; } acc += s.dur; }
+          fundo(x, d);
+          cena.desenha((tt - acc) / Math.min(0.5, cena.dur), tt);
+          if (trilha.requestFrame) trilha.requestFrame();
+          setTimeout(quadro, 1000 / FPS);   // não usa requestAnimationFrame: ele pausa com o app em segundo plano
+        }
+        quadro();
+      });
+      rec.stop();
+      await fim;
+      trilha.stop();
+      return new Blob(partes, { type: mime.split(';')[0] });
+    }
+    let mime = tipo();
+    let blob = await gravar(mime);
+    if (!blob.size && mime.includes('mp4') && MediaRecorder.isTypeSupported('video/webm')) { mime = 'video/webm'; blob = await gravar(mime); }
+    if (!blob.size) throw new Error('Não consegui gravar o vídeo neste aparelho. Use o Álbum (imagem).');
     const ext = mime.includes('mp4') ? 'mp4' : 'webm';
-    return new File([new Blob(partes, { type: mime.split(';')[0] })], `vila-melhores-momentos.${ext}`, { type: mime.split(';')[0] });
+    return new File([blob], `vila-melhores-momentos.${ext}`, { type: blob.type });
   }
 
   function fundo(x, d) {
