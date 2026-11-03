@@ -96,23 +96,24 @@ const Voz = (() => {
     on(isHost) { const v = ls.get('vila-voz'); return ok && (v == null ? !!isHost : v === '1'); },
     set(v) { ls.set('vila-voz', v ? '1' : '0'); if (!v && ok) speechSynthesis.cancel(); },
     // "ouvir meu papel / minha palavra": fala na hora, mesmo com o narrador desligado
-    falar(text) {
+    falar(text, tom) {
       if (!ok) return false;
       try {
         speechSynthesis.cancel();
         const u = new SpeechSynthesisUtterance(text);
-        u.lang = 'pt-BR'; u.rate = 0.95;
+        u.lang = 'pt-BR'; u.rate = (tom && tom.rate) || 0.95; if (tom && tom.pitch) u.pitch = tom.pitch;
         if (voice) u.voice = voice;
         speechSynthesis.speak(u);
         return true;
       } catch { return false; }
     },
-    say(text, isHost) {
+    // tom: { rate, pitch } da voz do narrador escolhida (Vó, Locutor, Voz do Além…)
+    say(text, isHost, tom) {
       if (!this.on(isHost)) return;
       try {
         speechSynthesis.cancel();
         const u = new SpeechSynthesisUtterance(text);
-        u.lang = 'pt-BR'; u.rate = 1.02; u.pitch = 0.92;
+        u.lang = 'pt-BR'; u.rate = (tom && tom.rate) || 1.02; u.pitch = (tom && tom.pitch) || 0.92;
         if (voice) u.voice = voice;
         speechSynthesis.speak(u);
       } catch { /* sem voz: tudo bem */ }

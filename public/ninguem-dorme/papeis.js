@@ -95,7 +95,61 @@
     }
   }
 
-  const NOITE = { PAPEIS, distribuir, ESPECIAIS, CASAL, roteiro, sumiuTxt, MIN: 4, MAX: 12 };
+  // Vozes do narrador: o mesmo roteiro com outra personalidade (jeito de falar + entonação da voz do aparelho).
+  const VOZES = {
+    padrao: { nome: 'Narrador da Vila', emoji: '🎙️', rate: 1.02, pitch: 0.92, antes: [''], depois: [''] },
+    vo: { nome: 'Vó Contadora', emoji: '👵', rate: 0.9, pitch: 1.2, premium: true,
+      antes: ['Ai, meus netinhos… ', 'Senta aqui que a vó conta: ', 'Pois é, no meu tempo era assim: '], depois: [' …e não esqueçam o casaco!', ' Ai, ai, essa vila…', ''] },
+    locutor: { nome: 'Locutor de Futebol', emoji: '📣', rate: 1.25, pitch: 1.05, premium: true,
+      antes: ['ATENÇÃO, VILA SOSSEGO! ', 'É AGORA, MINHA GENTE! ', 'OLHA ELE, OLHA ELE! '], depois: [' QUE JOGOOOO!', ' Tá lá o lance!', ' Segue o jogo!'] },
+    terror: { nome: 'Voz do Além', emoji: '👻', rate: 0.78, pitch: 0.55, premium: true,
+      antes: ['Shhh… escutem… ', 'Na escuridão da vila… ', 'Alguém está ouvindo os passos? '], depois: [' …muahahaha.', ' …e o silêncio voltou.', ''] },
+    reporter: { nome: 'Plantão da Vila', emoji: '📺', rate: 1.12, pitch: 1.05, premium: true,
+      antes: ['Plantão da Vila Sossego! ', 'Interrompemos a programação: ', 'Notícia urgente: '], depois: [' Voltamos a qualquer momento.', ' Fiquem ligados.', ''] },
+  };
+
+  // Mistérios da Vila: partidas com história (capítulo a cada noite, final próprio). Mesmas regras, mais clima.
+  const MISTERIOS = {
+    taca: { nome: 'O Sumiço da Taça', emoji: '🏆', premium: true,
+      sinopse: 'A taça do campeonato de bocha sumiu da prefeitura na véspera da final. Os capangas querem vender a taça na cidade vizinha.',
+      noites: ['Na prefeitura, a vitrine da taça amanheceu vazia. Pegadas de lama levam até a praça…',
+        'Alguém viu uma sombra carregando um saco pesado perto da estação…',
+        'Um bilhete apareceu debaixo da porta da padaria: "A taça vale mais que a vila".',
+        'O cachorro do Seu Lima latiu a noite inteira para o celeiro abandonado…',
+        'A final é amanhã. Se a taça não aparecer, a vila perde o campeonato!'],
+      vila: 'A taça foi encontrada no celeiro, embrulhada num pano de prato bordado! A final vai acontecer e a vila comemora!',
+      capangas: 'Os capangas fugiram de madrugada com a taça. A vila vai jogar a final… com um troféu de papelão.' },
+    radio: { nome: 'A Rádio Pirata', emoji: '📻', premium: true,
+      sinopse: 'Toda madrugada uma rádio pirata conta os segredos da vila. Os capangas estão por trás disso para espalhar a confusão.',
+      noites: ['À meia-noite, o rádio de pilha da Vó Zefa chiou: "Boa noite, Vila Sossego… eu sei o que vocês fizeram"…',
+        'A rádio pirata contou que alguém da vila tem medo de galinha. Ninguém dormiu de vergonha…',
+        'Um fio de antena foi visto saindo da torre da igreja até a casa de alguém…',
+        'A transmissão de hoje falou o nome de cada morador, um por um. Arrepio geral.',
+        'O sinal está mais forte do que nunca. A rádio diz que amanhã revela o maior segredo da vila…'],
+      vila: 'A antena foi arrancada e a rádio pirata saiu do ar! Os segredos da vila estão a salvo… por enquanto.',
+      capangas: 'A rádio pirata virou a mais ouvida da região. Agora todo mundo sabe de tudo da Vila Sossego!' },
+    bolo: { nome: 'O Concurso de Bolos', emoji: '🎂', premium: true,
+      sinopse: 'O famoso concurso de bolos da vila está sendo sabotado: alguém troca o açúcar por sal. Os capangas querem o prêmio de qualquer jeito.',
+      noites: ['A cozinha comunitária amanheceu com farinha no chão e uma colher de pau perdida…',
+        'O bolo de fubá da Dona Bitinha apareceu com gosto de mar. Sabotagem!',
+        'Alguém viu luz acesa na cozinha às três da manhã e cheiro de cobertura queimada…',
+        'O livro de receitas da vila sumiu. Sem receita, ninguém acerta o ponto!',
+        'Amanhã é o julgamento dos bolos. Quem não for pego até lá vai levar a faixa de campeão…'],
+      vila: 'O sabotador foi desmascarado com farinha até nas orelhas! O concurso volta e o bolo de fubá leva o prêmio!',
+      capangas: 'Os capangas ganharam o concurso com um bolo comprado na padaria da cidade. Que vergonha para a vila!' },
+  };
+
+  // aplica a voz (escolhe o começo e o fim do jeito daquela personalidade) e o capítulo do mistério
+  function narrar(g, n, fam, voz, misterio) {
+    const v = VOZES[voz] || VOZES.padrao;
+    const m = MISTERIOS[misterio];
+    let t = roteiro(g, n, fam);
+    if (m && g.fase === 'noite') t = (g.noite === 1 ? `${m.nome}. ${m.sinopse} ` : '') + m.noites[(g.noite - 1) % m.noites.length] + ' ' + t;
+    if (m && g.fase === 'fim') t += ' ' + (g.vencedor === 'vila' ? m.vila : m.capangas);
+    return { texto: `${pick(v.antes)}${t}${pick(v.depois)}`.trim(), rate: v.rate, pitch: v.pitch };
+  }
+
+  const NOITE = { PAPEIS, distribuir, ESPECIAIS, CASAL, VOZES, MISTERIOS, roteiro, narrar, sumiuTxt, MIN: 4, MAX: 12 };
   if (typeof module !== 'undefined' && module.exports) module.exports = NOITE;
   else root.NOITE = NOITE;
 })(this);

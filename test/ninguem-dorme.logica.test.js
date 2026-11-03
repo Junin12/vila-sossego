@@ -331,4 +331,26 @@ test('partidas aleatórias com a expansão sempre terminam', () => {
   }
 });
 
+test('narrador: todas as vozes e mistérios geram roteiro em todas as fases', () => {
+  const N = require('../public/ninguem-dorme/papeis');
+  const nome = (id) => 'Fulano ' + id;
+  const fases = [
+    { fase: 'noite', noite: 1, especial: null }, { fase: 'noite', noite: 7, especial: 'lua' },
+    { fase: 'amanhecer', anuncio: { sumiu: 'a', papel: 'morador', fofoca: { alvo: 'b', saiu: true } } },
+    { fase: 'dia' }, { fase: 'votacao' }, { fase: 'veredito', veredito: { expulso: 'c', papel: 'capanga' } }, { fase: 'fim', vencedor: 'capangas' },
+  ];
+  for (const voz of Object.keys(N.VOZES)) {
+    for (const m of ['nenhum', ...Object.keys(N.MISTERIOS)]) {
+      for (const g of fases) {
+        const r = N.narrar(g, nome, false, voz, m);
+        assert.ok(r.texto.length > 10, `${voz}/${m}/${g.fase}`);
+        assert.ok(!/undefined|null/.test(r.texto), r.texto);
+        assert.ok(r.rate > 0 && r.pitch > 0);
+      }
+    }
+  }
+  assert.match(N.narrar({ fase: 'fim', vencedor: 'vila' }, nome, false, 'padrao', 'taca').texto, /taça foi encontrada/);
+  assert.match(N.narrar({ fase: 'amanhecer', anuncio: { sumiu: 'a' } }, nome, true, 'padrao', 'nenhum').texto, /levado pelos capangas/, 'Modo Família');
+});
+
 console.log(`Ninguém Dorme: ${passed} testes de regras passaram`);

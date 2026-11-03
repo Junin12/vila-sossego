@@ -1,7 +1,7 @@
 'use strict';
 // Tela do Ninguém Dorme. A base (início, saguão, passaporte, chat, reações, narrador) vem de ../comum/vila.js.
 
-const { PAPEIS: R, distribuir, ESPECIAIS: ESP, CASAL, roteiro, sumiuTxt } = window.NOITE;
+const { PAPEIS: R, distribuir, ESPECIAIS: ESP, CASAL, VOZES, MISTERIOS, narrar, sumiuTxt } = window.NOITE;
 const fam = () => !!(Vila.state && Vila.state.settings.familia);   // Modo Família: textos leves
 const narrando = (s) => !!(s && s.settings.narrador);               // narrador humano conduz (sem voz do celular)
 const papelName = (r) => `${R[r].emoji} ${R[r].nome}`;
@@ -104,6 +104,7 @@ function nightScreen(s, g) {
       h('div', {}, h('small', {}, `Noite ${g.noite}`), h('h2', {}, g.especial === 'festa' ? 'Festa no arraial!' : 'A Vila Sossego dorme…')),
       Vila.tmr()),
     especialBanner(g.especial),
+    misterioBanner(s, g),
     me && me.vivo ? roleCard(me) : null,
     me && me.vivo ? ouvirPapel(me) : null,
     me ? partners(s, g) : null,
@@ -241,11 +242,25 @@ function narradorScreen(s, g) {
     Vila.chatPanel({ title: 'Conversa da vila', cls: 'flat' }));
 }
 // o roteiro sorteia variações; fixa uma por fase para não mudar a cada atualização da tela
-let rotKey = '', rotTxt = '';
-function roteiroFixo(g) {
+let rotKey = '', rot = { texto: '' };
+function roteiroObj(g) {
   const k = `${g.fase}|${g.noite}|${g.dia}`;
-  if (k !== rotKey) { rotKey = k; rotTxt = roteiro(g, (id) => Vila.P(id).name, fam()); }
-  return rotTxt;
+  const st = Vila.state.settings;
+  if (k !== rotKey) { rotKey = k; rot = narrar(g, (id) => Vila.P(id).name, fam(), st.voz, st.misterio); }
+  return rot;
+}
+const roteiroFixo = (g) => roteiroObj(g).texto;
+
+// Mistério da Vila: o capítulo da noite aparece na tela de todo mundo
+function misterioBanner(s, g) {
+  const m = MISTERIOS[s.settings.misterio];
+  if (!m) return null;
+  let txt = '';
+  if (g.fase === 'noite') txt = m.noites[(g.noite - 1) % m.noites.length];
+  else if (g.fase === 'fim') txt = g.vencedor === 'vila' ? m.vila : m.capangas;
+  else return h('p', { class: 'hint light center', 'data-key': 'mist' }, `${m.emoji} ${m.nome}`);
+  return h('section', { class: 'panel misterio', 'data-key': 'mist-' + g.fase + g.noite }, h('small', {}, `${m.emoji} ${m.nome}${g.fase === 'noite' ? ` · capítulo ${g.noite}` : ' · final'}`),
+    g.fase === 'noite' && g.noite === 1 ? h('p', { class: 'sinopse' }, m.sinopse) : null, h('p', {}, txt));
 }
 
 function verdictScreen(s, g) {
@@ -286,6 +301,7 @@ function endScreen(s, g) {
   return h('div', { class: 'screen', 'data-screen': 'nd-fim' },
     h('div', { class: `banner ${won ? 'win' : myTeam ? 'lose' : ''}` }, g.vencedor === 'vila' ? '🏘️ A vila venceu!' : '🦹 Os capangas venceram!',
       h('small', {}, myTeam ? (won ? 'Você está no time vencedor!' : 'Não foi dessa vez…') : 'Fim de jogo')),
+    misterioBanner(s, g),
     h('section', { class: 'panel' }, h('h2', {}, 'Quem era quem'),
       h('div', { class: 'whois' }, g.players.map((p) => h('div', { class: `wi ${R[p.papel].time}${p.vivo ? '' : ' dead'}` },
         av(Vila.P(p.id).avatar, 52), h('b', {}, Vila.P(p.id).name, g.casal && g.casal.includes(p.id) ? ' 💘' : ''),
@@ -305,7 +321,8 @@ function endScreen(s, g) {
 // Voz do celular de quem criou a sala; com telão, quem narra é o telão; com narrador humano, ninguém fala.
 function narrate(s, g) {
   if (narrando(s)) return null;
-  return Voz.say(roteiroFixo(g), Vila.isHost() && !s.tv);
+  const r = roteiroObj(g);
+  return Voz.say(r.texto, Vila.isHost() && !s.tv, r);
 }
 
 const FRASES = ['Confia em mim 😇', 'Juro que tava dormindo 😴', 'Eu sou da vila! 🏘️', 'Prova! Cadê a prova? 🤨', 'Votem comigo! 🗳️', 'Tá quieto demais… 👀'];
@@ -324,6 +341,10 @@ const Jogo = {
       hint: (v) => (v ? 'Vigia, Zé Pinguço, Coveiro e o Casal apaixonado entram conforme o tamanho da vila.' : 'Só os papéis básicos.') },
     { key: 'narrador', label: '🎙️ Narrador', fmt: (v) => (v ? 'Uma pessoa' : 'Voz do celular'),
       hint: (v) => (v ? 'Quem criou a sala narra lendo o roteiro na tela e não joga (precisa de 5 pessoas).' : 'O celular de quem criou a sala (ou o telão) narra sozinho.') },
+    { key: 'voz', label: '🎙️ Voz do narrador', fmt: (v) => `${VOZES[v].emoji} ${VOZES[v].nome}`,
+      hint: (v) => (v === 'padrao' ? 'Troque a personalidade do narrador: Vó, Locutor, Voz do Além ou Plantão.' : `O narrador vira ${VOZES[v].nome}. Liga o som!`) },
+    { key: 'misterio', label: '📖 Mistério da Vila', fmt: (v) => (v === 'nenhum' ? 'Partida normal' : `${MISTERIOS[v].emoji} ${MISTERIOS[v].nome}`),
+      hint: (v) => (v === 'nenhum' ? 'Escolha um mistério: a partida ganha história, um capítulo por noite e um final próprio.' : MISTERIOS[v].sinopse) },
     { key: 'especiais', label: 'Noites especiais', fmt: (v) => (v ? 'Ligadas' : 'Desligadas'),
       hint: (v) => (v ? 'De vez em quando: lua cheia, festa junina ou neblina.' : 'Toda noite é igual.') },
   ],

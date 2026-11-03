@@ -3,14 +3,15 @@
 
 const crypto = require('crypto');
 const L = require('./logica');
-const { PAPEIS, MIN, MAX } = require('../public/ninguem-dorme/papeis');
+const { PAPEIS, MIN, MAX, VOZES, MISTERIOS } = require('../public/ninguem-dorme/papeis');
 
 const rnd = (n) => crypto.randomInt(n);
 const chance = (pct) => rnd(100) < pct;
 const pickOne = (arr) => arr[rnd(arr.length)];
 
-const OPTIONS = { diaSecs: [60, 120, 180, 300], noiteSecs: [30, 45, 60], revelar: [1, 0], extras: [1, 0], especiais: [1, 0], narrador: [0, 1] };
-const DEFAULTS = { diaSecs: 120, noiteSecs: 45, revelar: 1, extras: 1, especiais: 1, narrador: 0 };
+const OPTIONS = { diaSecs: [60, 120, 180, 300], noiteSecs: [30, 45, 60], revelar: [1, 0], extras: [1, 0], especiais: [1, 0], narrador: [0, 1],
+  voz: Object.keys(VOZES), misterio: ['nenhum', ...Object.keys(MISTERIOS)] };
+const DEFAULTS = { diaSecs: 120, noiteSecs: 45, revelar: 1, extras: 1, especiais: 1, narrador: 0, voz: 'padrao', misterio: 'nenhum' };
 const ULTIMAS_BOT = ['Vocês vão se arrepender! 😤', 'Eu era inocente… cuidem da vila. 🥲', 'Fiquem de olho em quem votou primeiro! 👀',
   'Tudo bem… mas o verdadeiro capanga está rindo agora. 😏', 'Adeus, Vila Sossego! 👋'];
 const limpa = (s, max) => String(s == null ? '' : s).replace(/\s+/g, ' ').trim().slice(0, max);

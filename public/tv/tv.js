@@ -64,7 +64,7 @@ function efeitosCdp(prev) {
         if (e.had) Vila.flash({ emoji: M[e.card].emoji, title: 'Tinha mesmo!', text: `${nome(e.of)} era ${M[e.card].curto} de verdade!`, cls: 'good revela', ms: 3200 });
         else Vila.flash({ emoji: '🤥', title: 'ERA BLEFE!', text: `${nome(e.by)} pegou ${nome(e.of)} na mentira!`, cls: 'bad revela', ms: 3200 });
       }, 1800);
-    } else if (e.t === 'fim') { Snd.fanfare(); Vila.confetti(); }
+    } else if (e.t === 'fim') { Snd.fanfare(); Vila.confetti(); cerimonia(); }
   }
   vistos.log = g.log.length ? g.log[g.log.length - 1].n : vistos.log;
 }
@@ -80,9 +80,44 @@ function efeitosNd(prev) {
   if (g.fase === 'amanhecer') Snd.galo();
   if (g.fase === 'veredito') Snd.drum();
   if (g.fase === 'fim') { Snd.fanfare(); Vila.confetti(); }
-  const txt = window.NOITE.roteiro(g, nome, !!st.settings.familia);
+  if (g.fase === 'fim') { cerimonia(); return; }
+  const r = window.NOITE.narrar(g, nome, !!st.settings.familia, st.settings.voz, st.settings.misterio);
   try { speechSynthesis.cancel(); } catch { /* sem voz */ }
-  if (txt) setTimeout(() => Voz.falar(txt), g.fase === 'amanhecer' ? 1300 : 300);
+  if (r.texto) setTimeout(() => Voz.falar(r.texto, r), g.fase === 'amanhecer' ? 1300 : 300);
+}
+
+// ---------- cerimônia de premiação: no fim de cada partida, os prêmios aparecem um a um, com fanfarra e locução ----------
+function premios() {
+  const out = [];
+  const melhor = (lista, f) => lista.filter((p) => f(p) > 0).sort((a, b) => f(b) - f(a))[0];
+  if (slug === 'cara-de-pau' && st.game) {
+    const ps = st.game.players.filter((p) => p.stats);
+    const b = melhor(ps, (p) => p.stats.blefes); if (b) out.push(['🤥', 'Maior cara de pau', b.id, `${b.stats.blefes} blefes colaram`]);
+    const d = melhor(ps, (p) => p.stats.acertos); if (d) out.push(['🔎', 'Detetive da noite', d.id, `pegou ${d.stats.acertos} mentira(s)`]);
+    const c = melhor(ps, (p) => p.stats.pego); if (c) out.push(['🚨', 'Pego no flagra', c.id, `${c.stats.pego} vez(es)`]);
+  } else if (slug === 'ninguem-dorme' && st.game) {
+    const ps = st.game.players.filter((p) => p.stats);
+    const f = melhor(ps, (p) => p.stats.votosCertos); if (f) out.push(['🔎', 'Faro fino', f.id, `${f.stats.votosCertos} voto(s) certo(s)`]);
+    const a = melhor(ps, (p) => p.stats.salvou); if (a) out.push(['🌿', 'Anjo da guarda', a.id, `salvou ${a.stats.salvou} vez(es)`]);
+    const e = melhor(ps, (p) => p.stats.votosErrados); if (e) out.push(['🙈', 'Votou no inocente', e.id, `${e.stats.votosErrados} vez(es)`]);
+  } else if (slug === 'intruso' && st.awards) {
+    const nomes = { bluffer: ['🎭', 'Melhor blefador'], detective: ['🔍', 'Detetive da noite'], suspect: ['🕵️', 'Mais suspeito'], lost: ['🙈', 'Votou no inocente'] };
+    for (const [k, [e, t]] of Object.entries(nomes)) if (st.awards[k]) out.push([e, t, st.awards[k].pid, '']);
+  }
+  return out;
+}
+let cerimoniaKey = '';
+function cerimonia() {
+  const k = `${slug}|${st.round || st.matchRound}`;
+  if (k === cerimoniaKey) return;
+  cerimoniaKey = k;
+  const lista = premios();
+  lista.forEach(([emoji, titulo, id, sub], i) => setTimeout(() => {
+    Snd.fanfare();
+    Vila.flash({ emoji, title: titulo, text: `${nome(id)}${sub ? ' · ' + sub : ''}`, cls: 'sun', ms: 3600 });
+    Voz.falar(`E o prêmio de ${titulo} vai para… ${nome(id)}!`, { rate: 1.05, pitch: 1.05 });
+  }, 3500 + i * 4200));
+  setTimeout(() => Vila.confetti(), 3500 + lista.length * 4200);
 }
 
 function efeitosInt(prev) {
@@ -94,7 +129,7 @@ function efeitosInt(prev) {
     const r = st.result;
     Vila.flash({ emoji: r.impostorWins ? '🕵️' : '🎯', title: r.impostorWins ? 'O intruso venceu!' : 'Pegaram o intruso!', text: `A palavra era ${st.word}.`, cls: r.impostorWins ? 'bad' : 'good', ms: 3500 });
   } else if (st.phase === 'vote') Snd.alarm();
-  else if (st.phase === 'final') { Snd.fanfare(); Vila.confetti(); }
+  else if (st.phase === 'final') { Snd.fanfare(); Vila.confetti(); cerimonia(); }
 }
 
 // ---------- peças ----------

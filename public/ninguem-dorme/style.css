@@ -116,3 +116,8 @@ body.escuro .panel, body.escuro .role { filter: brightness(.9); }
 .roteiro small { font-weight: 800; text-transform: uppercase; letter-spacing: .06em; opacity: .7; }
 .roteiro p { font: 700 1.2rem/1.45 var(--body); }
 .btn.ouvir { min-height: 46px; font-size: .95rem; }
+/* Mistério da Vila: capítulo da noite */
+.misterio { background: linear-gradient(160deg, #2B3478, #17143F); color: #fff; }
+.misterio small { font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--sun); }
+.misterio p { font: 700 1.05rem/1.45 var(--body); }
+.misterio .sinopse { opacity: .85; font-style: italic; }
