@@ -139,6 +139,8 @@ function botLine(room, id) {
 
 module.exports = {
   id: 'ninguem-dorme', min: MIN, max: MAX, options: OPTIONS, defaults: DEFAULTS, RuleError: L.RuleError,
+  // vozes do narrador e Mistérios da Vila vêm com o Passe da Noite / Vila Completa
+  premium: { voz: (v) => v !== 'padrao', misterio: (v) => v !== 'nenhum' },
   start(room) {
     const s = room.settings;
     // narrador humano: quem criou a sala conduz a mesa e não joga

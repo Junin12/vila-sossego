@@ -136,3 +136,4 @@ const Momentos = (() => {
 
   return { pode, gerar, compartilhar };
 })();
+window.Momentos = Momentos;   // as telas testam window.Momentos

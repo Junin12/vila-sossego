@@ -10,7 +10,7 @@ const chance = (pct) => rnd(100) < pct;
 const pickOne = (arr) => arr[rnd(arr.length)];
 
 const OPTIONS = { labia: [0, 3, 4, 5], reactSecs: [8, 12, 20], eventos: [0, 1], feira: [0, 1], cartas: [2, 1], duplas: [0, 1], torneio: [0, 1] };
-const DEFAULTS = { labia: 4, reactSecs: 12, eventos: 1, feira: 1, cartas: 2, duplas: 0, torneio: 0 };
+const DEFAULTS = { labia: 4, reactSecs: 12, eventos: 1, feira: 0, cartas: 2, duplas: 0, torneio: 0 };
 const TORNEIO_JOGOS = 3;
 const { MORADORES } = require('../public/cara-de-pau/moradores');
 const limpa = (s, max) => String(s == null ? '' : s).replace(/\s+/g, ' ').trim().slice(0, max);
@@ -108,6 +108,8 @@ const LINES = {
 
 module.exports = {
   id: 'cara-de-pau', min: 2, max: 6, options: OPTIONS, defaults: DEFAULTS, RuleError: L.RuleError,
+  // Expansão Feira vem com o Passe da Noite / Vila Completa
+  premium: { feira: (v) => v === 1 },
   start(room) {
     const s = room.settings;
     // torneio de família: série de 3 partidas; começa outra quando a anterior acabou

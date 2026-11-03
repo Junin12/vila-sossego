@@ -22,7 +22,11 @@ const CODE_LETTERS = 'ABCDEFGHJKLMNPQRSTUVXZ';
 const EMOJIS = ['😂', '😱', '🤨', '🔥', '👀', '🤥'];
 const AVATAR_BASE = 12;
 const AVATAR_TOTAL = 20;   // deve bater com public/comum/avatars.js
-const FOTO_MAX = 12000;    // bytes do JPEG da selfie (a tela manda 96x96); fica só na memória, some com a sala
+const FOTO_MAX = 12000;
+// Premium da sala: o anfitrião com Passe da Noite/Vila Completa libera tudo para a sala; um convidado pode
+// "presentear" a sala vendo um anúncio premiado no app (3 horas). Confiança no app: o servidor só guarda o prazo.
+const PREMIUM_MAX_MS = 48 * 60 * 60 * 1000;
+const PRESENTE_MS = 3 * 60 * 60 * 1000;    // bytes do JPEG da selfie (a tela manda 96x96); fica só na memória, some com a sala
 const BOT_NAMES = ['Zé Bot', 'Dona Bitinha', 'Robertão', 'Lurdinha', 'Tião', 'Cida', 'Nestor', 'Jurema', 'Valdisney', 'Creusa', 'Genivaldo', 'Neusinha'];
 
 const newId = () => crypto.randomBytes(8).toString('hex');
@@ -69,7 +73,7 @@ function createRooms(G, ctx = {}) {
   function makeRoom(host) {
     return { code: newCode(), hostId: host.id, players: [host], phase: 'lobby', settings: { ...DEFAULTS }, g: null, round: 0,
       deadline: 0, total: 0, timer: null, armKey: '', botKeys: new Set(), botTimers: [], chat: [], reactions: [], seq: 0,
-      counted: false, lastActive: Date.now(), tvs: new Set(), festa: null, prenda: null, next: null, ultimos: [] };
+      counted: false, lastActive: Date.now(), tvs: new Set(), festa: null, prenda: null, next: null, ultimos: [], premium: 0, presenteDe: null };
   }
 
   function view(room, pid) {
@@ -78,6 +82,8 @@ function createRooms(G, ctx = {}) {
       code: room.code, you: pid, hostId: room.hostId, phase: room.phase, settings: room.settings, options: OPTIONS,
       min: G.min, max: G.max, emojis: EMOJIS, round: room.round, tv: room.tvs.size > 0,
       festa: festa && room.festa ? festa.resumo(festa.get(room.festa)) : null, prenda: room.prenda, next: room.next,
+      premium: room.premium > Date.now() ? room.premium : 0, presenteDe: room.premium > Date.now() ? room.presenteDe : null,
+      premiumOpts: G.premium ? Object.fromEntries(Object.entries(G.premium).map(([k, f]) => [k, (OPTIONS[k] || []).filter(f)])) : {},
       players: room.players.map((p) => ({ id: p.id, name: p.name, avatar: p.avatar, bot: p.bot, wins: p.wins, online: online(p), pp: p.pp })),
       leftMs: room.deadline ? Math.max(0, room.deadline - Date.now()) : 0, totalMs: room.total,
       reactions: room.reactions,
@@ -200,6 +206,7 @@ function createRooms(G, ctx = {}) {
         if (!lobby) fail('Mude as regras antes de começar.');
         const opts = OPTIONS[body.key];
         if (!opts || !opts.includes(body.value)) fail('Opção inválida.');
+        if (G.premium && G.premium[body.key] && G.premium[body.key](body.value) && !(room.premium > Date.now())) fail('🔒 Isso vem com o Passe da Noite ou a Vila Completa.');
         room.settings[body.key] = body.value;
         return;
       }
@@ -319,6 +326,17 @@ function createRooms(G, ctx = {}) {
         player.foto = buf;
         player.fotoV = (player.fotoV || 0) + 1;
         player.avatar = `f:${player.id}:${player.fotoV}`;
+        return;
+      }
+      case 'premium': {   // o anfitrião tem Passe/Vila Completa no app: libera a sala até `ate`
+        if (!isHost) fail('Só quem criou a sala.');
+        const ate = Math.min(Number(body.ate) || 0, Date.now() + PREMIUM_MAX_MS);
+        if (ate > room.premium) { room.premium = ate; room.presenteDe = null; }
+        return;
+      }
+      case 'presente': {   // alguém viu um anúncio premiado no app e presenteou a sala
+        room.premium = Math.max(room.premium, Date.now() + PRESENTE_MS);
+        room.presenteDe = player.name;
         return;
       }
       case 'custom': {

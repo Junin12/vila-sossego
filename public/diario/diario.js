@@ -58,7 +58,7 @@ function terminar() {
     if (g.ach.length) setTimeout(() => toast(`${g.ach[0].emoji} Conquista: ${g.ach[0].name}!`, true), 1800);
   } catch { /* sem passaporte: tudo bem */ }
   if (ok) { Snd.fanfare(); confete(); } else Snd.lose();
-  if (window.Premium) Premium.depoisDaPartida();
+  if (window.Premium) Premium.depoisDaPartida({ anfitriao: true, venceu: ok });
 }
 
 function confete() {

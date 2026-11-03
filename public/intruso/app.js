@@ -210,6 +210,8 @@ function onState(prev, s) {
     if (s.phase === 'result') startReveal(s);
     if (s.phase === 'final') onFinal(s);
   }
+  // anfitrião com Passe da Noite / Vila Completa libera os pacotes premium para a sala
+  if (s.hostId === s.you && Monet.premiumAte() - (s.premium || 0) > 60000) act('premium', { ate: Monet.premiumAte() });
   // prenda nova: todo mundo vê quem paga
   if (s.prenda && s.prenda.n !== prendaSeen) {
     const first = !prev;
@@ -548,8 +550,16 @@ function lobbyScreen() {
     festaPlacar(),
     h('section', { class: 'stack' },
       h('h2', {}, 'Categoria'),
-      h('div', { class: 'chips' }, s.categories.map((c) => h('button', { type: 'button', class: 'chip', 'data-act': 'category', 'data-v': c,
-        'aria-pressed': String(c === s.category), disabled: !host, 'data-key': c }, c))),
+      h('div', { class: 'chips' }, [...s.categories, ...(s.premium > Date.now() ? [] : s.premiumCats)].map((c) => {
+        const tranca = !(s.premium > Date.now()) && s.premiumCats.includes(c);
+        return h('button', { type: 'button', class: `chip${tranca ? ' tranca' : ''}`, 'data-act': 'category', 'data-v': c,
+          'aria-pressed': String(c === s.category), disabled: !host, 'data-key': c }, tranca ? '🔒 ' : '', c);
+      })),
+      s.premium > Date.now() ? h('p', { class: 'hint' }, `✨ Sala premium${s.presenteDe ? `: presente de ${s.presenteDe} 🎁` : ''}. Pacotes extras liberados.`)
+        : Monet.available ? h('div', { class: 'stack' },
+          h('button', { class: 'btn primary', type: 'button', 'data-act': 'buy', 'data-id': 'passe_noite' }, `🎉 Passe da Noite (24h)${Monet.price('passe_noite') ? ' · ' + Monet.price('passe_noite') : ''}`),
+          Monet.canReward() ? h('button', { class: 'btn good', type: 'button', 'data-act': 'presentear' }, '🎁 Ver um anúncio e liberar os pacotes para a sala (3h)') : null)
+          : h('p', { class: 'hint' }, '🔒 Pacotes extras: no app, com o Passe da Noite ou presenteando a sala.'),
       s.category === CUSTOM_CAT ? customPanel() : null),
     h('section', { class: 'panel flat' }, h('h2', {}, 'Ajustes da partida'), settingsPanel(true)),
     host
@@ -967,6 +977,8 @@ const ACT = {
   start: () => { Snd.unlock(); act('start'); },
   skip: () => act('skip'),
   addBot: () => act('addBot'),
+  presentear: () => Monet.rewarded(() => { act('presente'); toast('🎁 Você presenteou a sala! Pacotes liberados por 3 horas.', true); },
+    () => toast('Sem anúncio agora. Tente de novo em instantes.')),
   video: () => {
     const s = state, rows = rankingOf(s), tops = rows.filter((r) => r.rank === 1).map((r) => r.p);
     const linhas = awardList(s).map((a) => `${a.emoji} ${a.label}: ${a.name}`);

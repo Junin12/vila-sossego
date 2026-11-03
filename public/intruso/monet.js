@@ -5,9 +5,10 @@
 // - Compras: remove_ads e avatar_pack (libera os 8 personagens exclusivos).
 const Monet = (() => {
   const native = window.AndroidApp || null;
-  const KEY = 'intruso-monet', IDS = ['remove_ads', 'avatar_pack'];
+  const KEY = 'intruso-monet', IDS = ['remove_ads', 'avatar_pack', 'vila_completa', 'passe_noite'];
+  const PASSE_MS = 24 * 60 * 60 * 1000;
   const REWARD_XP = 30, REWARD_PER_DAY = 3, GAP_MS = 3 * 60 * 1000, EVERY = 2;
-  let s = Object.assign({ owned: [], prices: {}, matches: 0, lastAd: 0, rewardDay: '', rewardCount: 0 }, (() => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; } })());
+  let s = Object.assign({ owned: [], prices: {}, matches: 0, lastAd: 0, rewardDay: '', rewardCount: 0, passeAte: 0 }, (() => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; } })());
   let listeners = [], pendingReward = null, fail = null;
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { /* ok */ } };
   const today = () => new Date().toISOString().slice(0, 10);
@@ -21,6 +22,7 @@ const Monet = (() => {
     else if (e.type === 'prices' && e.prices && typeof e.prices === 'object') {
       s.prices = {}; for (const id of IDS) if (typeof e.prices[id] === 'string') s.prices[id] = e.prices[id].slice(0, 20);
       save(); emit();
+    } else if (e.type === 'purchased' && e.id === 'passe_noite') { s.passeAte = Math.max(s.passeAte, Date.now()) + PASSE_MS; save(); emit();
     } else if (e.type === 'purchased' && IDS.includes(e.id)) { if (!s.owned.includes(e.id)) s.owned.push(e.id); save(); emit(); }
     else if (e.type === 'reward') {
       const cb = pendingReward;
@@ -37,12 +39,14 @@ const Monet = (() => {
     available: !!native,
     REWARD_XP,
     owns: (id) => s.owned.includes(id),
+    // Passe da Noite / Vila Completa: libera a sala inteira (pacotes premium)
+    premiumAte: () => (s.owned.includes('vila_completa') ? Date.now() + 47 * 3600000 : s.passeAte),
     price: (id) => s.prices[id] || '',
     buy: (id) => { if (IDS.includes(id)) call('buy', id); },
     onChange: (f) => { listeners.push(f); },
     // Chamar ao terminar uma partida (já depois de enviar a ação ao servidor, para não atrasar a sala).
     afterMatch() {
-      if (!native || s.owned.includes('remove_ads')) return;
+      if (!native || s.owned.includes('remove_ads') || s.owned.includes('vila_completa') || s.passeAte > Date.now()) return;
       s.matches++;
       const due = s.matches % EVERY === 0 && Date.now() - s.lastAd > GAP_MS;
       save();

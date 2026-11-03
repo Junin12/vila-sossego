@@ -224,6 +224,45 @@ const Vila = (() => {
     render();
   }
 
+  // Anfitrião com Passe da Noite / Vila Completa: a sala inteira fica premium (o servidor guarda o prazo)
+  function liberarSala() {
+    if (!window.Premium || !isHost() || !Premium.ativo()) return;
+    const ate = Premium.ate();
+    if (ate - (state.premium || 0) > 60000) act('premium', { ate });
+  }
+
+  // Painel premium do saguão: o que está liberado, comprar no app, presentear a sala ou baixar o app
+  function premiumPanel() {
+    if (!window.Premium) return null;
+    const agora = Date.now();
+    if (state.premium > agora) {
+      const hora = new Date(state.premium).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      return h('section', { class: 'panel premium on', 'data-key': 'premium' }, h('b', {}, '✨ Sala premium'),
+        h('small', {}, state.presenteDe ? `Presente de ${state.presenteDe} 🎁 · até ${hora}` : `Liberada até ${hora}`),
+        h('p', { class: 'hint' }, 'Vozes do narrador, Mistérios da Vila, Expansão Feira e pacotes de palavras liberados para todo mundo.'));
+    }
+    if (!Premium.app) {
+      return h('section', { class: 'panel premium', 'data-key': 'premium' }, h('b', {}, '✨ Quer mais?'),
+        h('p', { class: 'hint' }, 'No app da Vila tem vozes do narrador, Mistérios da Vila, Expansão Feira e pacotes de palavras, e dá para presentear a sala vendo um anúncio.'),
+        h('a', { class: 'btn', href: Premium.lojaUrl, target: '_blank', rel: 'noopener' }, '📲 Baixar o app'));
+    }
+    const p = (id) => (Premium.preco(id) ? ` · ${Premium.preco(id)}` : '');
+    return h('section', { class: 'panel premium', 'data-key': 'premium' }, h('b', {}, '✨ Libere tudo para a sala'),
+      h('p', { class: 'hint' }, 'Vozes do narrador, Mistérios da Vila, Expansão Feira e pacotes novos. Quem compra libera para a sala toda.'),
+      h('button', { class: 'btn primary', type: 'button', 'data-act': 'comprar', 'data-id': 'passe_noite' }, `🎉 Passe da Noite (24h)${p('passe_noite')}`),
+      h('button', { class: 'btn', type: 'button', 'data-act': 'comprar', 'data-id': 'vila_completa' }, `🏡 Vila Completa, para sempre${p('vila_completa')}`),
+      Premium.podePresentear() ? h('button', { class: 'btn good', type: 'button', 'data-act': 'presentear' }, '🎁 Ver um anúncio e presentear a sala (3h)') : null);
+  }
+
+  // Pedido de avaliação: depois da 3ª vitória, uma vez só (só no app)
+  function avaliarPanel() {
+    if (!window.Premium || !Premium.querAvaliar()) return null;
+    return h('section', { class: 'panel avaliar', 'data-key': 'avaliar' }, h('b', {}, 'Tá curtindo a Vila? ⭐⭐⭐⭐⭐'),
+      h('p', { class: 'hint' }, 'Uma avaliação na loja ajuda muito a vila a crescer!'),
+      h('div', { class: 'two' }, h('button', { class: 'btn primary', type: 'button', 'data-act': 'avaliar' }, 'Avaliar'),
+        h('button', { class: 'btn', type: 'button', 'data-act': 'naoAvaliar' }, 'Agora não')));
+  }
+
   // Prenda nova: todo mundo vê quem paga (e o telão também).
   function anunciarPrenda(prev) {
     const pr = state.prenda;
@@ -265,6 +304,7 @@ const Vila = (() => {
       if (quickStart && state.phase === 'lobby' && state.hostId === state.you) { quickStart = false; act('start'); }
       anunciarPrenda(prev);
       seguirFesta();
+      liberarSala();
       try { J.onState(prev, state); } catch (err) { console.error(err); }
       render();
     };
@@ -295,6 +335,7 @@ const Vila = (() => {
     ls.set('vila-ultimo', key);
     lastResult = Perfil.onGame(prof, e);
     saveProf();
+    if (window.Premium) Premium.depoisDaPartida({ anfitriao: isHost(), venceu: !!e.won });
     setTimeout(() => {
       toast(`+${lastResult.xp} XP` + (lastResult.levelUp ? ` · Nível ${lastResult.levelUp}!` : '') + (lastResult.avatars.length ? ' · Personagem novo!' : ''), true);
       if (lastResult.seasonDone) {
@@ -547,7 +588,7 @@ const Vila = (() => {
   }
 
   function endButtons() {
-    const extra = [prendaPanel(), albumButton(), festaNext()];
+    const extra = [avaliarPanel(), prendaPanel(), albumButton(), festaNext()];
     if (isHost()) {
       return h('div', { class: 'endstack', 'data-key': 'endbtns' }, extra,
         h('div', { class: 'two' },
@@ -704,6 +745,7 @@ const Vila = (() => {
           h('p', { class: 'hint' }, 'A foto fica só nesta sala, enquanto ela existir. Ninguém guarda.')] : null,
         host ? h('button', { class: 'btn', type: 'button', 'data-act': 'addBot', disabled: state.players.length >= state.max }, '🤖 Chamar um bot') : null,
         host && !enough ? h('p', { class: 'hint' }, `Precisa de pelo menos ${state.min}. Sem gente? Chame bots e jogue agora.`) : null),
+      premiumPanel(),
       h('div', { class: 'two' },
         h('button', { class: 'btn', type: 'button', 'data-act': 'tv' }, '📺 Telão'),
         h('button', { class: `btn${state.festa ? ' good' : ''}`, type: 'button', 'data-act': 'festa', disabled: !host, 'aria-pressed': String(!!state.festa) },
@@ -712,8 +754,11 @@ const Vila = (() => {
       placar(),
       h('section', { class: 'panel' }, h('h2', {}, 'Regras da sala'),
         [FAMILIA, ...J.settings].map((s) => h('div', { class: 'setrow' }, h('span', { class: 'setlbl' }, s.label),
-          h('div', { class: 'chips' }, state.options[s.key].map((v) => h('button', { class: 'chip', type: 'button', 'data-act': 'setting',
-            'data-k': s.key, 'data-v': JSON.stringify(v), 'aria-pressed': String(state.settings[s.key] === v), disabled: !host }, s.fmt(v)))),
+          h('div', { class: 'chips' }, state.options[s.key].map((v) => {
+            const tranca = !(state.premium > Date.now()) && (state.premiumOpts[s.key] || []).includes(v);
+            return h('button', { class: `chip${tranca ? ' tranca' : ''}`, type: 'button', 'data-act': 'setting',
+              'data-k': s.key, 'data-v': JSON.stringify(v), 'aria-pressed': String(state.settings[s.key] === v), disabled: !host }, tranca ? '🔒 ' : '', s.fmt(v));
+          })),
           s.hint ? h('small', { class: 'hint' }, s.hint(state.settings[s.key])) : null))),
       J.lobby ? J.lobby(state) : null,
       host ? h('button', { class: 'btn primary big', type: 'button', 'data-act': 'start', disabled: !enough },
@@ -840,6 +885,11 @@ const Vila = (() => {
     sound: () => { Snd.toggle(); render(); },
     voz: () => { Voz.set(!Voz.on(isHost())); toast(Voz.on(isHost()) ? '🎙️ Narrador ligado neste celular' : 'Narrador desligado', true); render(); },
     tv: () => { showTv = true; render(); },
+    comprar: (el) => Premium.comprar(el.dataset.id),
+    presentear: () => Premium.presentear(() => { act('presente'); toast('🎁 Você presenteou a sala! Tudo liberado por 3 horas.', true); },
+      () => toast('Sem anúncio agora. Tente de novo em instantes.')),
+    avaliar: () => { Premium.avaliar(); render(); },
+    naoAvaliar: () => { Premium.dispensarAvaliacao(); render(); },
     closeTv: (el, e) => { if (el.classList.contains('sheet') && e.target !== el) return; showTv = false; render(); },
     festa: () => act('festa'),
     prenda: () => act('prenda'),
@@ -910,6 +960,7 @@ const Vila = (() => {
 
   function start(jogo) {
     J = jogo;
+    if (window.Premium) Premium.onChange(() => { if (state) liberarSala(); render(); });
     document.body.classList.add('j-' + J.slug);
     document.documentElement.classList.toggle('grande', grande());
     loadProf();

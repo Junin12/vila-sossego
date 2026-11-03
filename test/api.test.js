@@ -70,6 +70,10 @@ async function main() {
     assert.match(r.body.error, /Duplas/);
     assert.equal(room.round, 0, 'não contou rodada');
     await act({ type: 'addBot' });
+    // Expansão Feira é premium: sem Passe/presente, recusa; com o presente de alguém, libera
+    assert.equal((await act({ type: 'setting', key: 'feira', value: 1 })).status, 400, 'Feira trancada sem premium');
+    assert.equal((await act({ type: 'presente' })).status, 200);
+    assert.ok(room.premium > Date.now() && room.presenteDe === 'Solo');
     for (const [key, value] of [['feira', 1], ['cartas', 1]]) assert.equal((await act({ type: 'setting', key, value })).status, 200);
     assert.equal((await act({ type: 'start' })).status, 200);
     let ms = 0;

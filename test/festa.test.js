@@ -190,6 +190,22 @@ async function main() {
     assert.throws(() => ND.move(room, alvo.id, { t: 'ultimas', text: 'de novo' }), /já deixou/);
   });
 
+  await test('premium: vozes/mistérios e pacotes trancados até o anfitrião liberar', async () => {
+    const nd = await post('/ninguem-dorme/api/create', { name: 'Pri', bots: 4 });
+    const ndAct = (b) => post('/ninguem-dorme/api/act', { code: nd.body.code, pid: nd.body.pid, ...b });
+    assert.equal((await ndAct({ type: 'setting', key: 'voz', value: 'locutor' })).status, 400);
+    assert.equal((await ndAct({ type: 'setting', key: 'voz', value: 'padrao' })).status, 200, 'voz padrão é grátis');
+    await ndAct({ type: 'premium', ate: Date.now() + 99 * 3600000 });
+    const room = GAMES['ninguem-dorme'].rooms.get(nd.body.code);
+    assert.ok(room.premium <= Date.now() + 48 * 3600000 + 1000, 'prazo limitado a 48h');
+    assert.equal((await ndAct({ type: 'setting', key: 'misterio', value: 'taca' })).status, 200);
+    const it = await post('/intruso/api/create', { name: 'Rui' });
+    const itAct = (b) => post('/intruso/api/act', { code: it.body.code, pid: it.body.pid, ...b });
+    assert.equal((await itAct({ type: 'category', value: 'Coisas de vó' })).status, 400);
+    await itAct({ type: 'presente' });
+    assert.equal((await itAct({ type: 'category', value: 'Coisas de vó' })).status, 200);
+  });
+
   server.close();
   if (server.closeAllConnections) server.closeAllConnections();
   console.log(`Festa, telão e novidades: ${passed} testes passaram`);

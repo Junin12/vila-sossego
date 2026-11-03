@@ -21,6 +21,10 @@ const TEAMS_FROM = 4;
 const DRAW_MAX = 2500;   // tamanho do rabisco (pontos 0..99, traços separados por |)
 const BOT_NAMES = ['Zé Bot', 'Dona Bitinha', 'Robertão', 'Lurdinha', 'Tião', 'Cida', 'Nestor', 'Jurema', 'Valdisney', 'Creusa'];
 const FOTO_MAX = 12000;
+// pacotes que vêm com o Passe da Noite / Vila Completa (ver salas.js: premium da sala)
+const PREMIUM_CATS = new Set(['Brinquedos e brincadeiras', 'Coisas de vó']);
+const PREMIUM_MAX_MS = 48 * 60 * 60 * 1000;
+const PRESENTE_MS = 3 * 60 * 60 * 1000;
 let festa = null;   // Noite de Festa (festa.js), ligado pelo server.js
 const ACCOMPLICE_FROM = 6;
 const CUSTOM = 'Personalizada';
@@ -82,7 +86,7 @@ function makeRoom(host) {
   return {
     code: newCode(), hostId: host.id, players: [host], phase: 'lobby', category: 'Todas',
     settings: { total: 5, clueSecs: 30, voteSecs: 60, mode: 0, accomplice: 0, familia: 0, draw: 0, teams: 0 }, matchRound: 0, customWords: [],
-    tvs: new Set(), festa: null, prenda: null, next: null, botTimers: [], botKey: '',
+    tvs: new Set(), festa: null, prenda: null, next: null, botTimers: [], botKey: '', premium: 0, presenteDe: null,
     usedWords: new Set(), wordCategory: null, word: null, altWord: null, impostorIds: [], accompliceId: null, roster: [], order: [], turn: 0,
     clues: [], votes: {}, guesses: {}, chat: [], reactions: [], reactSeq: 0, result: null, awards: null,
     deadline: 0, timer: null, armKey: '', turnStart: 0, lastActive: Date.now(),
@@ -93,7 +97,7 @@ const findPlayer = (room, pid) => room.players.find((p) => p.id === pid);
 const connected = (room) => room.players.filter((p) => p.res);   // humanos conectados
 const ativo = (p) => !!p && (p.bot || !!p.res);                   // joga agora (bot sempre)
 const rosterOnline = (room) => room.roster.filter((id) => ativo(findPlayer(room, id)));
-const categorias = (room) => Object.keys(WORDS).filter((c) => !room.settings.familia || !FORA_FAMILIA.has(c));
+const categorias = (room) => Object.keys(WORDS).filter((c) => (!room.settings.familia || !FORA_FAMILIA.has(c)) && (room.premium > Date.now() || !PREMIUM_CATS.has(c)));
 
 // O que cada jogador pode ver. Impostores nunca recebem a palavra antes do resultado (nem quem está só assistindo).
 function view(room, pid) {
@@ -109,6 +113,7 @@ function view(room, pid) {
     code: room.code, you: pid, hostId: room.hostId, phase: room.phase,
     categories: ['Todas', ...categorias(room), CUSTOM], category: room.category, tv: room.tvs.size > 0, teamsFrom: TEAMS_FROM,
     festa: festa && room.festa ? festa.resumo(festa.get(room.festa)) : null, prenda: room.prenda, next: room.next,
+    premium: room.premium > Date.now() ? room.premium : 0, presenteDe: room.premium > Date.now() ? room.presenteDe : null, premiumCats: [...PREMIUM_CATS],
     minPlayers: MIN_PLAYERS, laps: CLUE_LAPS, settings: room.settings, options: OPTIONS, emojis: EMOJIS,
     matchRound: room.matchRound, twoFrom: TWO_IMPOSTORS_FROM, accompliceFrom: ACCOMPLICE_FROM,
     customCount: room.customWords.length, customMin: CUSTOM_MIN,
@@ -369,6 +374,7 @@ function act(room, player, body) {
       if (room.phase !== 'lobby' || !isHost) fail('Só o anfitrião muda a categoria.');
       const c = clean(body.value, 30);
       if (c !== 'Todas' && c !== CUSTOM && !WORDS[c]) fail('Categoria inválida.');
+      if (PREMIUM_CATS.has(c) && !(room.premium > Date.now())) fail('🔒 Esse pacote vem com o Passe da Noite ou a Vila Completa.');
       room.category = c;
       break;
     }
@@ -399,6 +405,17 @@ function act(room, player, body) {
       if (!Number.isInteger(a) || a < 0 || a >= AVATAR_TOTAL) fail('Personagem inválido.');
       if (room.players.some((p) => p !== player && p.avatar === a)) fail('Esse personagem já foi escolhido.');
       player.avatar = a;
+      break;
+    }
+    case 'premium': {
+      if (!isHost) fail('Só o anfitrião.');
+      const ate = Math.min(Number(body.ate) || 0, Date.now() + PREMIUM_MAX_MS);
+      if (ate > room.premium) { room.premium = ate; room.presenteDe = null; }
+      break;
+    }
+    case 'presente': {
+      room.premium = Math.max(room.premium, Date.now() + PRESENTE_MS);
+      room.presenteDe = player.name;
       break;
     }
     case 'addBot': {

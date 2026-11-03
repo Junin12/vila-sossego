@@ -319,3 +319,11 @@ html.grande .chip, html.grande .qchip { font-size: 1.05rem; }
 .torneio.fim b { font: 800 1.6rem var(--display); }
 .torneio.fim p { font: 800 1.15rem var(--display); }
 select { min-height: 54px; padding: 0 10px; border: 3px solid var(--ink); border-radius: 14px; background: #fff; color: var(--ink); font: 700 1rem var(--body); max-width: 46%; }
+
+/* premium */
+.premium { background: linear-gradient(160deg, #EFE8FF, #D9CCFF); }
+.premium.on { background: linear-gradient(160deg, #FFF1B8, #FFD23F); }
+.premium b { font: 800 1.2rem var(--display); }
+.premium small { font-weight: 800; }
+.chip.tranca { opacity: .75; border-style: dashed; }
+.avaliar { background: linear-gradient(160deg, #FFF6D6, #FFE08A); text-align: center; }

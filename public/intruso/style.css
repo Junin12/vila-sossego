@@ -361,3 +361,5 @@ html.grande body { font-size: 1.12rem; }
 .prenda p { font-weight: 700; font-size: 1.1rem; }
 .placar-festa { background: linear-gradient(160deg, #FFE4F1, #FFC3DD); }
 .tvinfo b { font-weight: 800; }
+
+  .chip.tranca { opacity: .75; border-style: dashed; }
