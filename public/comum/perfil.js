@@ -20,6 +20,7 @@ const Perfil = (() => {
     cdp: { partidas: 0, vitorias: 0, blefes: 0, duvidasCertas: 0, labia: 0 },
     nd: { partidas: 0, vitorias: 0, vitCapanga: 0, vitVila: 0, sobreviveu: 0, votosCertos: 0, delegadaAcertos: 0 },
     int: { partidas: 0, vitorias: 0, rodadas: 0, vitIntruso: 0, votosCertos: 0 },
+    diario: { jogados: 0, acertos: 0, melhorSeq: 0 },
   });
 
   const ACH = [
@@ -42,6 +43,8 @@ const Perfil = (() => {
     ['int1', '🕵️', 'Disfarce perfeito', 'Vença uma rodada do Intruso como intruso', (p) => p.int.vitIntruso >= 1],
     ['int10', '🔍', 'Olho de lince', 'Ache o intruso 10 vezes', (p) => p.int.votosCertos >= 10],
     ['tres', '🏡', 'Morador completo', 'Jogue os três jogos da vila', (p) => p.cdp.partidas >= 1 && p.nd.partidas >= 1 && p.int.partidas >= 1],
+    ['diario1', '🧩', 'Detetive do dia', 'Ache o intruso no Intruso Diário', (p) => p.diario.acertos >= 1],
+    ['diario7', '📆', 'Investigador fiel', 'Acerte o Intruso Diário 7 dias seguidos', (p) => p.diario.melhorSeq >= 7],
     ['temp1', '🏅', 'Campeão da temporada', 'Complete todas as metas de uma temporada', (p) => Object.keys(p.temporadas || {}).length >= 1],
   ].map((a) => ({ id: a[0], emoji: a[1], name: a[2], desc: a[3], test: a[4] }));
 
@@ -115,6 +118,7 @@ const Perfil = (() => {
     p.cdp = Object.assign(b.cdp, p.cdp);
     p.nd = Object.assign(b.nd, p.nd);
     p.int = Object.assign(b.int, p.int);
+    p.diario = Object.assign(b.diario, p.diario);
     if (p.lastDay !== today) { p.days++; p.lastDay = today; }
     if (!p.daily || p.daily.day !== today) p.daily = { day: today, id: dailyFor(today).id, prog: 0, done: false };
     const mes = today.slice(0, 7);
@@ -182,8 +186,24 @@ const Perfil = (() => {
     return out;
   }
 
+  // Intruso Diário (sozinho, 1 por dia): XP pelo acerto, pela palavra, pela estrela e pela sequência
+  function onDiario(p, e, today = dayKey()) {
+    touch(p, today);
+    const before = snapshot(p);
+    let gain = 10 + (e.intruso ? 20 : 0) + (e.palavra ? 10 : 0) + (e.estrela ? 10 : 0) + Math.min(e.sequencia || 0, 7) * 2;
+    p.diario.jogados++;
+    if (e.intruso) p.diario.acertos++;
+    p.diario.melhorSeq = Math.max(p.diario.melhorSeq, e.sequencia || 0);
+    p.xp += gain;
+    const out = { xp: gain, levelUp: null, ach: [], avatars: [] };
+    for (const a of ACH) if (!p.ach[a.id] && a.test(p)) { p.ach[a.id] = today; out.ach.push(a); }
+    if (levelInfo(p.xp).level > levelInfo(before.xp).level) out.levelUp = levelInfo(p.xp).level;
+    for (const u of UNLOCKS) if (u.test(p) && !u.test(before)) out.avatars.push(u.i);
+    return out;
+  }
+
   const unlocked = (p, i) => i < 12 || UNLOCKS.some((u) => u.i === i && u.test(p));
 
-  return { blank, touch, onGame, levelInfo, dailyFor, dayKey, unlocked, temporada, ACH, UNLOCKS, DAILY, METAS, XP, TITLES };
+  return { blank, touch, onGame, onDiario, levelInfo, dailyFor, dayKey, unlocked, temporada, ACH, UNLOCKS, DAILY, METAS, XP, TITLES };
 })();
 if (typeof module !== 'undefined') module.exports = Perfil;

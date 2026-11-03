@@ -6,7 +6,7 @@
   "private": true,
   "scripts": {
     "start": "node server.js",
-    "test": "node test/cara-de-pau.logica.test.js && node test/ninguem-dorme.logica.test.js && node test/perfil.test.js && node test/intruso.palavras.test.js && node test/intruso.perfil.test.js && node test/intruso.rules.test.js && node test/api.test.js && node test/festa.test.js"
+    "test": "node test/cara-de-pau.logica.test.js && node test/ninguem-dorme.logica.test.js && node test/perfil.test.js && node test/intruso.palavras.test.js && node test/intruso.perfil.test.js && node test/intruso.rules.test.js && node test/api.test.js && node test/festa.test.js && node test/diario.test.js"
   },
   "engines": {
     "node": ">=18"

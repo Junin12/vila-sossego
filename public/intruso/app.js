@@ -1066,4 +1066,17 @@ if (session) connect();
     if (n) n.value = nome;
     enter('api/join', { code: sala.toUpperCase() });
   }
+  // "Treinar contra bots" (Intruso Diário / portal): cria a sala, chama 3 bots e começa
+  if (q.get('bots') === '1') {
+    history.replaceState(null, '', location.pathname);
+    if (session) { if (es) es.close(); ls.del('intruso-sessao'); session = null; state = null; render(); }
+    const n = document.getElementById('nome');
+    if (!nome) { toast('Digite seu nome e crie a sala; depois toque em "Chamar um bot".', true); if (n) n.focus(); return; }
+    if (n) n.value = nome;
+    enter('api/create', {}).then(async () => {
+      if (!session) return;
+      for (let i = 0; i < 3; i++) await act('addBot');
+      await act('start');
+    });
+  }
 })();

@@ -1,0 +1,18 @@
+/* Intruso Diário: verde-menta da investigação; o resto vem da base comum. */
+body.j-diario { --bg: #17A877; --bg2: #0E7A56; }
+.cat { align-items: center; text-align: center; }
+.cat small { font-weight: 800; text-transform: uppercase; letter-spacing: .08em; opacity: .7; }
+.cat b { font: 800 1.8rem var(--display); }
+.susps { display: flex; flex-direction: column; gap: 10px; }
+.susp { display: grid; grid-template-columns: 56px 1fr; grid-template-rows: auto auto; column-gap: 12px; align-items: center; padding: 10px 12px;
+  border: 3px solid var(--ink); border-radius: 18px; background: #fff; color: var(--ink); text-align: left; font: inherit; cursor: pointer; box-shadow: 0 4px 0 var(--ink); }
+.susp .av { grid-row: span 2; }
+.susp b { font: 800 1.1rem var(--display); }
+.susp .dicas { display: flex; flex-wrap: wrap; gap: 6px; }
+.susp .dica { padding: 2px 10px; border: 2px solid var(--ink); border-radius: 99px; background: var(--tint); font-weight: 800; animation: pop .3s both; }
+.susp small { grid-column: 2; font-weight: 800; }
+.susp:disabled { cursor: default; }
+.susp.errado { opacity: .55; background: #FFE0E1; }
+.susp.intruso { background: var(--sun); animation: nudge 1s ease-in-out 2; }
+.opcoes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.grade pre { margin: 0; padding: 12px; border: 2px dashed var(--ink); border-radius: 12px; background: var(--tint); font: 700 1rem/1.5 var(--body); white-space: pre-wrap; text-align: center; }
