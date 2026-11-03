@@ -20,6 +20,7 @@ async function main() {
     assert.equal((await get(p)).status, 200, p);
   }
   assert.equal((await get('/../server.js')).status, 404);
+  for (const p of ['/tv', '/intruso', '/cara-de-pau']) assert.equal((await fetch(base + p + '?sala=AB', { redirect: 'manual' })).headers.get('location'), p + '/?sala=AB', 'sem barra vai para a pasta');
   assert.equal((await get('/healthz')).text, 'ok');
 
   for (const [slug, nBots, extra] of [['cara-de-pau', 3, { key: 'eventos', value: 1 }], ['ninguem-dorme', 6, { key: 'diaSecs', value: 60 }]]) {

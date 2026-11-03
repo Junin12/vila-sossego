@@ -67,7 +67,8 @@ const server = http.createServer((req, res) => {
     return;
   }
   // /cara-de-pau sem barra → com barra (os caminhos da página são relativos)
-  if (GAMES[url.pathname.slice(1)]) { res.writeHead(301, { Location: url.pathname + '/' + url.search }); res.end(); return; }
+  const pasta = url.pathname.slice(1);
+  if (GAMES[pasta] || pasta === 'tv') { res.writeHead(301, { Location: url.pathname + '/' + url.search }); res.end(); return; }
   let rel = decodeURIComponent(url.pathname).replace(/^\/+/, '');
   if (rel === '' || rel.endsWith('/')) rel += 'index.html';
   const file = path.join(PUBLIC, rel);
