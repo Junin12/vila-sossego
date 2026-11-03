@@ -11,8 +11,10 @@ Dois apps separados na loja (cada um aparece na sua busca), por dentro o mesmo s
 
 ## Antes de publicar (checklist)
 1. **Servidor sem dormir**: plano pago do Render (Starter, ~US$ 7/mês) no serviço `vila-sossego`. No grátis, a 1ª abertura leva até 50 s.
-2. **Banco online** (passaporte, ranking, A Turma): criar projeto Supabase, rodar `supabase/vila_kv.sql` e pôr no Render
-   `SUPABASE_URL` e `SUPABASE_SERVICE_KEY`. Sem isso, os dados ficam num arquivo que some a cada atualização do servidor.
+2. **Banco online** (passaporte, ranking, A Turma): projeto Supabase `vila-sossego` (ref `ypjifpwftiagauejafeg`, São Paulo,
+   grátis) já criado com a tabela `vila_kv`. Falta pôr no Render (Environment): `SUPABASE_URL=https://ypjifpwftiagauejafeg.supabase.co`
+   e `SUPABASE_SERVICE_KEY` (Supabase → Project Settings → API Keys → chave secreta / service_role). Sem isso, os dados ficam
+   num arquivo que some a cada atualização do servidor.
 3. **AdMob** (Ninguém Dorme): criar o app e dois blocos (intersticial e premiado) e preencher em `android/gradle.properties`
    (`ADMOB_APP_ID`, `INTERSTITIAL_ID`, `REWARDED_ID`). Sem isso o app usa anúncios de TESTE.
 4. **Produtos no Play Console** (Monetizar → Produtos → Produtos únicos), nos dois apps:
