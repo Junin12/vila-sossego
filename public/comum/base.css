@@ -327,3 +327,11 @@ select { min-height: 54px; padding: 0 10px; border: 3px solid var(--ink); border
 .premium small { font-weight: 800; }
 .chip.tranca { opacity: .75; border-style: dashed; }
 .avaliar { background: linear-gradient(160deg, #FFF6D6, #FFE08A); text-align: center; }
+
+/* Vila online */
+.codigo-online { padding: 10px; border: 3px dashed var(--ink); border-radius: 14px; background: var(--tint); text-align: center; font: 800 1.15rem var(--display); letter-spacing: .06em; word-break: break-all; }
+.turma { background: linear-gradient(160deg, #E4F7EE, #BDEFD8); }
+.turma ol, .placar ol { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.turma li, .placar li.row { display: flex; align-items: center; gap: 10px; }
+.turma li b, .placar li.row b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.placar li.row.me b { text-decoration: underline 3px var(--sun); }

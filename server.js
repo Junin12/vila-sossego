@@ -7,16 +7,18 @@ const fs = require('fs');
 const path = require('path');
 const { createRooms, GameError } = require('./salas');
 const festa = require('./festa');
+const { criarNuvem, NuvemErro } = require('./nuvem');
+const nuvem = criarNuvem();   // passaporte online, ranking, A Turma (Supabase se configurado; senão arquivo)
 
 const PORT = process.env.PORT || Number(process.argv[2]) || 3000;
 const PUBLIC = path.join(__dirname, 'public');
 
 const GAMES = {
-  'cara-de-pau': createRooms(require('./cara-de-pau/jogo'), { slug: 'cara-de-pau', festa }),
-  'ninguem-dorme': createRooms(require('./ninguem-dorme/jogo'), { slug: 'ninguem-dorme', festa }),
+  'cara-de-pau': createRooms(require('./cara-de-pau/jogo'), { slug: 'cara-de-pau', festa, nuvem }),
+  'ninguem-dorme': createRooms(require('./ninguem-dorme/jogo'), { slug: 'ninguem-dorme', festa, nuvem }),
   intruso: require('./intruso/servidor'),   // regras próprias (veio do repositório Intruso)
 };
-GAMES.intruso.ligarFesta(festa);
+GAMES.intruso.ligarFesta(festa, nuvem);
 for (const [slug, g] of Object.entries(GAMES)) festa.registrarJogo(slug, g.abrir);
 
 function readJson(req) {
@@ -59,6 +61,15 @@ const server = http.createServer((req, res) => {
     return;
   }
   if (url.pathname === '/healthz') { res.writeHead(200); res.end('ok'); return; }
+  // Vila online: passaporte, ranking e A Turma
+  if (nuvem.ROTAS[url.pathname]) {
+    if (req.method !== 'POST') { send(res, 405, { error: 'Use POST.' }); return; }
+    readJson(req).then((b) => nuvem.ROTAS[url.pathname](b)).then((out) => send(res, 200, out)).catch((e) => {
+      if (!(e instanceof NuvemErro || e instanceof GameError)) console.error(e);
+      send(res, e instanceof NuvemErro || e instanceof GameError ? 400 : 500, { error: e instanceof NuvemErro || e instanceof GameError ? e.message : 'A nuvem da vila está fora do ar. Tente de novo.' });
+    });
+    return;
+  }
   // telão: descobre de qual jogo é a sala pelo código
   if (url.pathname === '/api/onde') {
     const code = String(url.searchParams.get('code') || '').trim().toUpperCase();
@@ -86,4 +97,4 @@ const server = http.createServer((req, res) => {
 if (require.main === module) {
   server.listen(PORT, '0.0.0.0', () => console.log(`Vila Sossego rodando em http://localhost:${PORT}`));
 }
-module.exports = { server, GAMES };
+module.exports = { server, GAMES, nuvem };

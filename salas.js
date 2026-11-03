@@ -168,7 +168,8 @@ function createRooms(G, ctx = {}) {
         room.counted = true;
         for (const id of ws) { const p = findPlayer(room, id); if (p) p.wins += 1; }
         const ids = G.participants ? G.participants(room) : room.players.map((p) => p.id);
-        room.ultimos = ids.map((id) => findPlayer(room, id)).filter(Boolean).map((p) => ({ name: p.name, avatar: p.avatar, bot: p.bot, venceu: ws.includes(p.id) }));
+        room.ultimos = ids.map((id) => findPlayer(room, id)).filter(Boolean).map((p) => ({ name: p.name, avatar: p.avatar, bot: p.bot, pp: p.pp, venceu: ws.includes(p.id) }));
+        if (ctx.nuvem) ctx.nuvem.registrarPartida(ctx.slug, room.ultimos.map((r) => ({ ...r, nome: r.name }))).catch((e) => console.error('turma:', e.message));
         if (G.onEnd) G.onEnd(room, ws);
         if (festa && room.festa) {
           const f = festa.registrar(room.festa, ctx.slug, room.ultimos);

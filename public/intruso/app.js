@@ -919,7 +919,7 @@ async function enter(path, body) {
   ls.set('intruso-avatar', myAvatar);
   Snd.unlock();
   try {
-    const r = await api(path, { name, avatar: myAvatar, ...body });
+    const r = await api(path, { name, avatar: myAvatar, pp: ls.get('vila-pp') || undefined, ...body });
     session = { code: r.code, pid: r.pid };
     ls.set('intruso-sessao', JSON.stringify(session));
     connect();

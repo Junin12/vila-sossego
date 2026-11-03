@@ -26,6 +26,8 @@ const PREMIUM_CATS = new Set(['Brinquedos e brincadeiras', 'Coisas de vó']);
 const PREMIUM_MAX_MS = 48 * 60 * 60 * 1000;
 const PRESENTE_MS = 3 * 60 * 60 * 1000;
 let festa = null;   // Noite de Festa (festa.js), ligado pelo server.js
+let nuvem = null;   // A Turma (nuvem.js): partidas contam no hall da fama
+const validPp = (v) => (typeof v === 'string' && /^[a-z0-9]{8}$/.test(v) ? v : null);
 const ACCOMPLICE_FROM = 6;
 const CUSTOM = 'Personalizada';
 const CUSTOM_MIN = 6;
@@ -646,6 +648,7 @@ async function handle(req, res, url, sub, readJson) {
   if (sub === '/create') {
     if (rooms.size >= MAX_ROOMS) fail('Servidor cheio, tente em instantes.');
     const player = makePlayer(validName(null, body.name), pickAvatar(null, body.avatar));
+    player.pp = validPp(body.pp);
     const room = makeRoom(player);
     if (!room.code) fail('Não foi possível criar a sala.');
     rooms.set(room.code, room);
@@ -656,6 +659,7 @@ async function handle(req, res, url, sub, readJson) {
     if (!room) fail('Sala não encontrada.');
     if (room.players.length >= MAX_PLAYERS) fail('Sala cheia.');
     const player = makePlayer(validName(room, body.name), pickAvatar(room, body.avatar));
+    player.pp = validPp(body.pp);
     player.waiting = room.phase !== 'lobby';        // entrou no meio: assiste e joga a partir da próxima rodada
     room.players.push(player);
     broadcast(room);
@@ -680,8 +684,10 @@ setInterval(() => {
 
 // Noite de Festa: no placar final, quem fez mais pontos (empate vale) vence a partida da noite
 function registrarFesta(room) {
-  if (!festa || !room.festa) return;
   const top = Math.max(0, ...room.players.map((p) => p.score));
+  if (nuvem) nuvem.registrarPartida('intruso', room.players.map((p) => ({ pp: p.pp, nome: p.name, bot: !!p.bot, venceu: top > 0 && p.score === top })))
+    .catch((e) => console.error('turma:', e.message));
+  if (!festa || !room.festa) return;
   const f = festa.registrar(room.festa, 'intruso', room.players.map((p) => ({ name: p.name, avatar: p.avatar, bot: !!p.bot, venceu: top > 0 && p.score === top })));
   if (f && f.prenda) room.prenda = { ...f.prenda };
 }
@@ -699,4 +705,4 @@ function abrir(host, festaId) {
   return { code: room.code, pid: player.id };
 }
 
-module.exports = { handle, rooms, abrir, ligarFesta: (f) => { festa = f; } };
+module.exports = { handle, rooms, abrir, ligarFesta: (f, n) => { festa = f; nuvem = n || null; } };

@@ -147,6 +147,7 @@ const Vila = (() => {
   let myAvatar = 0;
   let quickStart = false;   // "Jogar agora com bots": começa sozinho assim que a sala abrir
   let showTv = false;       // instruções do telão
+  let rankData = null, turmasData = null, turmaVista = null, onlineErro = '';   // Vila online (aba do passaporte)
   let prendaSeen = 0;       // última prenda já anunciada
   let indo = false;         // Noite de Festa: indo para o próximo jogo
   let showTransfer = false;
@@ -305,6 +306,7 @@ const Vila = (() => {
       anunciarPrenda(prev);
       seguirFesta();
       liberarSala();
+      if (window.Online) Online.anotarAmigos(state.players.filter((p) => !p.bot).map((p) => p.pp));
       try { J.onState(prev, state); } catch (err) { console.error(err); }
       render();
     };
@@ -336,6 +338,7 @@ const Vila = (() => {
     lastResult = Perfil.onGame(prof, e);
     saveProf();
     if (window.Premium) Premium.depoisDaPartida({ anfitriao: isHost(), venceu: !!e.won });
+    if (window.Online) Online.salvar(prof, ls.get('vila-nome'), myAvatar);
     setTimeout(() => {
       toast(`+${lastResult.xp} XP` + (lastResult.levelUp ? ` · Nível ${lastResult.levelUp}!` : '') + (lastResult.avatars.length ? ' · Personagem novo!' : ''), true);
       if (lastResult.seasonDone) {
@@ -697,7 +700,66 @@ const Vila = (() => {
       h('section', { class: 'panel' }, h('h2', {}, 'Personagens exclusivos'),
         h('ul', { class: 'achs' }, Perfil.UNLOCKS.map((u) => h('li', { class: `ach${Perfil.unlocked(prof, u.i) ? ' on' : ''}` },
           av(u.i, 44), h('div', {}, h('b', {}, AVATARS[u.i].name), h('small', {}, u.req)))))),
+      onlinePanel(),
+      rankingPanel(),
+      turmaPanel(),
       transferPanel());
+  }
+
+  // ---------- Vila online ----------
+  async function carregarOnline() {
+    if (!window.Online) return;
+    onlineErro = '';
+    try { [rankData, turmasData] = await Promise.all([Online.ranking(), Online.turmas()]); }
+    catch (e) { onlineErro = e.message; }
+    if (turmasData && turmasData.turmas.length && !turmaVista) { try { turmaVista = await Online.verTurma(turmasData.turmas[0].id); } catch { /* ok */ } }
+    render();
+  }
+
+  function onlinePanel() {
+    if (!window.Online) return null;
+    return h('section', { class: 'panel', 'data-key': 'online' }, h('h2', {}, '☁️ Passaporte salvo na nuvem'),
+      h('p', { class: 'hint' }, 'Seu passaporte fica salvo sozinho. Em outro celular, digite este código para continuar de onde parou:'),
+      h('p', { class: 'codigo-online' }, Online.codigoBonito()),
+      h('form', { class: 'form-row', 'data-form': 'recuperar' },
+        h('input', { name: 'cod', autocomplete: 'off', placeholder: 'Código de outro celular', 'aria-label': 'Código do passaporte' }),
+        h('button', { class: 'btn', type: 'submit' }, 'Usar')),
+      h('h3', {}, '💌 Convide e ganhe'),
+      h('p', { class: 'hint' }, `Quem entrar pelo seu link conta para você. Convites aceitos: ${Online.convites()}. Com 3, você vira Embaixador da Vila!`),
+      h('button', { class: 'btn wa', type: 'button', 'data-act': 'convidar' }, '📣 Mandar meu convite'));
+  }
+
+  function rankingPanel() {
+    if (!window.Online) return null;
+    if (!rankData) return h('section', { class: 'panel', 'data-key': 'rank' }, h('h2', {}, '🏆 Ranking da semana'), h('p', { class: 'hint' }, onlineErro || 'Carregando…'));
+    const linha = (r, i) => h('li', { class: `row${r.pp === Online.pp() ? ' me' : ''}`, 'data-key': 'rk' + r.pp }, h('span', { class: 'pos' }, `${i + 1}º`), av(r.avatar, 32),
+      h('b', {}, r.pp === Online.pp() ? 'Você' : r.nome), h('span', { class: 'wins' }, `${r.xpSemana} XP`));
+    return h('section', { class: 'panel placar', 'data-key': 'rank' }, h('h2', {}, '🏆 Ranking da semana'),
+      h('h3', {}, 'Você e quem jogou com você'),
+      rankData.amigos.length > 1 ? h('ol', {}, rankData.amigos.map(linha)) : h('p', { class: 'hint' }, 'Jogue com a turma (cada um no seu celular) para aparecer aqui quem jogou com você.'),
+      rankData.geral.length ? [h('h3', {}, 'Vila inteira'), h('ol', {}, rankData.geral.slice(0, 10).map(linha))] : null,
+      h('p', { class: 'hint' }, 'Conta o XP ganho na semana. Zera toda segunda.'));
+  }
+
+  function turmaPanel() {
+    if (!window.Online) return null;
+    const convite = ls.get('vila-turma-convite');
+    const t = turmaVista;
+    return h('section', { class: 'panel turma', 'data-key': 'turma' }, h('h2', {}, '👨‍👩‍👧 A Turma'),
+      convite ? h('div', { class: 'stack' }, h('p', {}, `Você recebeu um convite para a turma ${convite}.`),
+        h('button', { class: 'btn primary', type: 'button', 'data-act': 'entrarConvite' }, 'Entrar na turma')) : null,
+      t ? [h('h3', {}, `${t.nome} · código ${t.id}`),
+        t.rivalidade ? h('p', { class: 'fact' }, `⚔️ Maior rivalidade: ${t.rivalidade.vencedor} já venceu ${t.rivalidade.perdedor} ${t.rivalidade.vezes} vez(es)`) : null,
+        h('ol', {}, t.membros.map((m, i) => h('li', { class: 'row', 'data-key': 'tm' + m.pp }, h('span', { class: 'pos' }, i === 0 && m.vitorias ? '👑' : `${i + 1}º`), av(m.avatar, 32),
+          h('b', {}, m.nome), h('span', { class: 'wins' }, `${m.vitorias} 🏆 / ${m.partidas}`)))),
+        t.hist.length ? h('p', { class: 'hint' }, `Última: ${t.hist[0].vencedores.join(' e ') || 'ninguém'} venceu(ram) ${({ 'cara-de-pau': 'Cara de Pau', 'ninguem-dorme': 'Ninguém Dorme', intruso: 'Intruso' })[t.hist[0].jogo] || ''}`) : h('p', { class: 'hint' }, 'Joguem juntos (2 ou mais da turma na mesma sala) para o hall da fama começar.'),
+        h('button', { class: 'btn wa', type: 'button', 'data-act': 'convidarTurma' }, '📣 Chamar a família para a turma'),
+        turmasData && turmasData.turmas.length > 1 ? h('div', { class: 'chips' }, turmasData.turmas.map((x) => h('button', { class: 'chip', type: 'button', 'data-act': 'verTurma', 'data-id': x.id, 'aria-pressed': String(x.id === t.id) }, x.nome))) : null]
+        : h('p', { class: 'hint' }, 'Crie a turma da família ou dos amigos: hall da fama, campeão de cada jogo e as rivalidades de sempre.'),
+      h('form', { class: 'form-row', 'data-form': 'criarTurma' }, h('input', { name: 'nome', maxlength: 24, placeholder: 'Nome da turma (ex.: Família Silva)', 'aria-label': 'Nome da turma' }),
+        h('button', { class: 'btn', type: 'submit' }, 'Criar')),
+      h('form', { class: 'form-row', 'data-form': 'entrarTurma' }, h('input', { name: 'id', maxlength: 6, class: 'code-in', placeholder: 'CÓDIGO', 'aria-label': 'Código da turma' }),
+        h('button', { class: 'btn', type: 'submit' }, 'Entrar')));
   }
 
   function transferPanel() {
@@ -853,7 +915,23 @@ const Vila = (() => {
       myAvatar = i; ls.set('vila-avatar', i); picker = false; act('avatar', { value: i });
     },
     picker: () => { picker = !picker; render(); },
-    perfil: () => { tab = 'perfil'; render(); window.scrollTo(0, 0); },
+    perfil: () => { tab = 'perfil'; render(); window.scrollTo(0, 0); carregarOnline(); },
+    convidar: async () => {
+      const link = Online.linkConvite(SITE);
+      const text = `Vem jogar comigo na Vila Sossego! Cara de Pau, Ninguém Dorme e Intruso, cada um no seu celular: ${link}`;
+      try { if (navigator.share) await navigator.share({ text }); else window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank', 'noopener'); } catch { /* cancelou */ }
+    },
+    convidarTurma: async () => {
+      if (!turmaVista) return;
+      const text = `Entra na nossa turma "${turmaVista.nome}" na Vila Sossego (hall da fama da família!): ${SITE}ninguem-dorme/?turma=${turmaVista.id}`;
+      try { if (navigator.share) await navigator.share({ text }); else window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank', 'noopener'); } catch { /* cancelou */ }
+    },
+    verTurma: async (el) => { try { turmaVista = await Online.verTurma(el.dataset.id); render(); } catch (e) { toast(e.message); } },
+    entrarConvite: async () => {
+      const id = ls.get('vila-turma-convite');
+      try { await Online.entrarTurma(id); ls.del('vila-turma-convite'); turmaVista = await Online.verTurma(id); toast('Você entrou na turma! 🎉', true); carregarOnline(); }
+      catch (e) { toast(e.message); }
+    },
     home: () => { tab = 'home'; render(); },
     rules: () => { showRules = true; render(); },
     closeRules: (el, e) => { if (el.classList.contains('sheet') && e.target !== el) return; showRules = false; render(); },
@@ -938,6 +1016,31 @@ const Vila = (() => {
       enter('join', { code });
     },
     chat: (f) => { const i = f.elements.msg; const text = i.value.trim(); if (text) { i.value = ''; act('chat', { text }); } },
+    recuperar: async (f) => {
+      const cod = f.elements.cod.value.trim();
+      if (!cod) return;
+      if (!confirm('Trocar o passaporte deste celular pelo da nuvem? O daqui será substituído.')) return;
+      try {
+        const r = await Online.recuperar(cod);
+        prof = Perfil.touch(Object.assign(Perfil.blank(), r.perfil));
+        saveProf();
+        if (r.nome) ls.set('vila-nome', r.nome);
+        if (Perfil.unlocked(prof, r.avatar)) { myAvatar = r.avatar; ls.set('vila-avatar', r.avatar); }
+        toast('Passaporte recuperado! 🎉', true); carregarOnline();
+      } catch (e) { toast(e.message); }
+    },
+    criarTurma: async (f) => {
+      const nome = f.elements.nome.value.trim();
+      if (!nome) { toast('Dê um nome para a turma.'); return; }
+      try { const t = await Online.criarTurma(nome); turmaVista = await Online.verTurma(t.id); f.elements.nome.value = ''; toast('Turma criada! Chame a família. 🎉', true); carregarOnline(); }
+      catch (e) { toast(e.message); }
+    },
+    entrarTurma: async (f) => {
+      const id = f.elements.id.value.trim().toUpperCase();
+      if (id.length !== 6) { toast('O código da turma tem 6 letras.'); return; }
+      try { await Online.entrarTurma(id); turmaVista = await Online.verTurma(id); toast('Você entrou na turma! 🎉', true); carregarOnline(); }
+      catch (e) { toast(e.message); }
+    },
     importPass: (f) => {
       const code = f.elements.code.value;
       if (!code.trim()) return;
@@ -964,6 +1067,11 @@ const Vila = (() => {
     document.body.classList.add('j-' + J.slug);
     document.documentElement.classList.toggle('grande', grande());
     loadProf();
+    prof.convites = window.Online ? Online.convites() : prof.convites;
+    if (window.Online) Online.salvar(prof, ls.get('vila-nome'), myAvatar);
+    const qs = new URLSearchParams(location.search);
+    if (/^[A-Za-z0-9]{6}$/.test(qs.get('turma') || '')) { ls.set('vila-turma-convite', qs.get('turma').toUpperCase()); tab = 'perfil'; setTimeout(carregarOnline, 50); }
+    if (qs.get('aba') === 'perfil') { tab = 'perfil'; setTimeout(carregarOnline, 50); }
     try { session = JSON.parse(ls.get(`vila-sessao-${J.slug}`)); } catch { session = null; }
     if (session) setFotoBase(`api/foto?code=${encodeURIComponent(session.code)}`);
     const sala = new URLSearchParams(location.search).get('sala');

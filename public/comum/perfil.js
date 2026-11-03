@@ -21,6 +21,7 @@ const Perfil = (() => {
     nd: { partidas: 0, vitorias: 0, vitCapanga: 0, vitVila: 0, sobreviveu: 0, votosCertos: 0, delegadaAcertos: 0 },
     int: { partidas: 0, vitorias: 0, rodadas: 0, vitIntruso: 0, votosCertos: 0 },
     diario: { jogados: 0, acertos: 0, melhorSeq: 0 },
+    convites: 0,
   });
 
   const ACH = [
@@ -45,6 +46,7 @@ const Perfil = (() => {
     ['tres', '🏡', 'Morador completo', 'Jogue os três jogos da vila', (p) => p.cdp.partidas >= 1 && p.nd.partidas >= 1 && p.int.partidas >= 1],
     ['diario1', '🧩', 'Detetive do dia', 'Ache o intruso no Intruso Diário', (p) => p.diario.acertos >= 1],
     ['diario7', '📆', 'Investigador fiel', 'Acerte o Intruso Diário 7 dias seguidos', (p) => p.diario.melhorSeq >= 7],
+    ['convida3', '💌', 'Embaixador da Vila', 'Convide 3 pessoas que entraram na vila', (p) => (p.convites || 0) >= 3],
     ['temp1', '🏅', 'Campeão da temporada', 'Complete todas as metas de uma temporada', (p) => Object.keys(p.temporadas || {}).length >= 1],
   ].map((a) => ({ id: a[0], emoji: a[1], name: a[2], desc: a[3], test: a[4] }));
 
