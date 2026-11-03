@@ -535,7 +535,9 @@ const Vila = (() => {
   }
   function albumButton() {
     if (!J.album) return null;
-    return h('button', { class: 'btn', type: 'button', 'data-act': 'album', 'data-key': 'albumbtn' }, '📸 Álbum da noite');
+    return h('div', { class: 'two', 'data-key': 'albumbtn' },
+      h('button', { class: 'btn', type: 'button', 'data-act': 'album' }, '📸 Álbum da noite'),
+      window.Momentos && Momentos.pode() ? h('button', { class: 'btn', type: 'button', 'data-act': 'video' }, '🎬 Vídeo da noite') : null);
   }
 
   // Contar o resultado pra turma (WhatsApp / compartilhar do celular).
@@ -842,6 +844,12 @@ const Vila = (() => {
     festa: () => act('festa'),
     prenda: () => act('prenda'),
     album: () => { album().catch(() => toast('Não consegui montar o álbum.')); },
+    video: () => {
+      const a = J.album && J.album(state);
+      if (!a) return;
+      const frase = fraseDaNoite();
+      Momentos.compartilhar({ ...a, linhas: [...a.linhas, ...(frase ? [`😂 ${frase}`] : [])], fotoBase: FOTO_BASE }, toast).catch((e) => toast(e.message || 'Não consegui gravar o vídeo.'));
+    },
     letra: () => { const on = !grande(); document.documentElement.classList.toggle('grande', on); ls.set('vila-letra', on ? '1' : '0'); render(); },
     proximo: async (el) => {
       const jogo = el.dataset.j;

@@ -863,6 +863,7 @@ function finalScreen() {
     h('div', { class: 'two' },
       h('button', { class: 'btn wa', type: 'button', 'data-act': 'whatsapp' }, 'WhatsApp'),
       h('button', { class: 'btn', type: 'button', 'data-act': 'saveCard' }, 'Salvar imagem')),
+    window.Momentos && Momentos.pode() ? h('button', { class: 'btn', type: 'button', 'data-act': 'video' }, '🎬 Vídeo da noite') : null,
     isHost() ? h('button', { class: 'btn primary', type: 'button', 'data-act': 'rematch' }, 'Nova partida')
       : h('p', { class: 'sub', style: 'text-align:center' }, `Aguardando ${P(s.hostId).name}`));
 }
@@ -966,6 +967,12 @@ const ACT = {
   start: () => { Snd.unlock(); act('start'); },
   skip: () => act('skip'),
   addBot: () => act('addBot'),
+  video: () => {
+    const s = state, rows = rankingOf(s), tops = rows.filter((r) => r.rank === 1).map((r) => r.p);
+    const linhas = awardList(s).map((a) => `${a.emoji} ${a.label}: ${a.name}`);
+    Momentos.compartilhar({ titulo: '🕵️ Intruso', destaque: `${tops.map((p) => p.name).join(' e ')} ${tops.length > 1 ? 'venceram' : 'venceu'}!`,
+      linhas, avatares: tops.map((p) => p.avatar), fotoBase: FOTO_BASE, cor1: '#8FE3C4', cor2: '#0E7A56' }, toast).catch((e) => toast(e.message || 'Não consegui gravar o vídeo.'));
+  },
   kick: (el) => act('kick', { id: el.dataset.id }),
   tv: () => { showTv = !showTv; render(); },
   festa: () => act('festa'),
