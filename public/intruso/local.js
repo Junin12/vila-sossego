@@ -85,6 +85,9 @@ function locSetup() {
       h('div', { class: 'setrow' }, h('p', { class: 'setlbl' }, 'Modo de jogo'),
         h('div', { class: 'chips' }, chip('locMode', 0, Number(loc.similar), 'Clássico'), chip('locMode', 1, Number(loc.similar), 'Palavra parecida'))),
       h('p', { class: 'hint' }, loc.similar ? 'O intruso recebe uma palavra parecida e pode nem perceber que é o intruso.' : 'O intruso não recebe palavra nenhuma, só a categoria.'),
+      h('div', { class: 'setrow' }, h('p', { class: 'setlbl' }, 'Como dar a dica'),
+        h('div', { class: 'chips' }, chip('locMimica', 0, Number(!!loc.mimica), '🗣️ Falando'), chip('locMimica', 1, Number(!!loc.mimica), '🤸 Mímica'))),
+      h('p', { class: 'hint' }, loc.mimica ? 'Ninguém fala: cada um faz uma mímica que lembre a palavra. O intruso imita sem saber o que é. Ótimo com criança!' : 'Cada um fala uma palavra que lembre a sua.'),
       h('div', { class: 'setrow' }, h('p', { class: 'setlbl' }, 'Tamanho da partida'),
         h('div', { class: 'chips' }, [5, 10, 20].map((v) => chip('locTotal', v, loc.total, `${v} rodadas`))))),
     h('button', { class: 'btn primary', type: 'button', 'data-act': 'locStart', disabled: n < 3 },
@@ -107,15 +110,16 @@ function locPass() {
       h('div', { class: 'sp' + (k === i ? ' now' : k < i ? ' done' : ''), 'data-key': 's' + k }, av(k % 12, 42)))),
     card,
     loc.peek ? h('button', { class: 'btn primary', type: 'button', 'data-act': 'locNext' },
-      last ? 'Esconder e começar as dicas' : `Esconder e passar para ${loc.names[i + 1]}`) : null,
+      last ? (loc.mimica ? 'Esconder e começar as mímicas' : 'Esconder e começar as dicas') : `Esconder e passar para ${loc.names[i + 1]}`) : null,
     quitBtn());
 }
 
 function locTalk() {
   const n = loc.names.length, order = loc.names.map((_, k) => (loc.starter + k) % n);
   return locScreen('talk',
-    h('div', { class: 'hero' }, h('p', { class: 'sub' }, `Rodada ${loc.round} de ${loc.total} · ${loc.wordCat}`), h('h1', {}, 'Hora das dicas'),
-      h('p', { class: 'sub' }, `Cada um fala em voz alta uma palavra que lembre a sua, nesta ordem, por 2 voltas. Depois conversem e decidam em quem votar.`
+    h('div', { class: 'hero' }, h('p', { class: 'sub' }, `Rodada ${loc.round} de ${loc.total} · ${loc.wordCat}`), h('h1', {}, loc.mimica ? 'Hora da mímica! 🤸' : 'Hora das dicas'),
+      h('p', { class: 'sub' }, (loc.mimica ? 'Sem falar nada! Cada um faz uma mímica que lembre a sua palavra, nesta ordem, por 2 voltas. Depois conversem e decidam em quem votar.'
+        : 'Cada um fala em voz alta uma palavra que lembre a sua, nesta ordem, por 2 voltas. Depois conversem e decidam em quem votar.')
         + (loc.similar ? ' Lembrem: o intruso pode nem saber que é ele.' : ''))),
     h('section', { class: 'panel' }, h('h2', {}, 'Ordem da roda'),
       h('ol', { class: 'rows' }, order.map((k, pos) => h('li', { class: 'row' + (pos === 0 ? ' first' : ''), 'data-key': 'o' + k },
@@ -185,6 +189,7 @@ Object.assign(ACT, {
   locDel: (el) => { loc.names.splice(Number(el.dataset.i), 1); saveLoc(); render(); },
   locCat: (el) => { loc.cat = el.dataset.v; saveLoc(); render(); },
   locMode: (el) => { loc.similar = el.dataset.v === '1'; saveLoc(); render(); },
+  locMimica: (el) => { loc.mimica = el.dataset.v === '1'; saveLoc(); render(); },
   locTotal: (el) => { loc.total = Number(el.dataset.v); saveLoc(); render(); },
   locStart: locDo(() => { Snd.unlock(); loc.scores = loc.names.map(() => 0); loc.round = 0; locNewRound(); Snd.pop(); }),
   locPeek: (el) => { loc.peek = true; saveLoc(); Snd.pop(); render(); },

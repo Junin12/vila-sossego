@@ -104,6 +104,16 @@
       'Game Boy|Polystation', 'Tazos|Cards de Yu-Gi-Oh', 'Ioiô|Pião', 'Furby|Bichinho virtual', 'Orkut|MSN', 'Kazaa|Winamp', 'Paciência|Campo minado', 'Counter-Strike|GTA San Andreas',
       'Street Fighter|Mortal Kombat', 'Spice Girls|Backstreet Boys', 'Pochete|Mochila de um ombro só', 'Fax|Secretária eletrônica', 'Polaroid|Câmera descartável', 'Locadora|Videocassete',
     ],
+    'Brinquedos e brincadeiras': [
+      'Pião|Ioiô', 'Pipa|Cata-vento', 'Peteca|Bambolê', 'Pega-pega|Esconde-esconde', 'Queimada|Pique-bandeira', 'Pular corda|Elástico', 'Boneca|Ursinho de pelúcia', 'Carrinho|Patinete', 'Dominó|Jogo da memória', 'Damas|Xadrez',
+      'Blocos de montar|Torre de blocos', 'Massinha|Geleca', 'Balanço|Gangorra', 'Escorregador|Gira-gira', 'Bicicleta|Triciclo', 'Patins|Skate', 'Videogame|Fliperama', 'Figurinha|Tazo', 'Pistola de água|Balão de água', 'Fantoche|Dedoche',
+      'Tambor|Xilofone', 'Avião de papel|Barquinho de papel', 'Batalha naval|Forca', 'Par ou ímpar|Pedra, papel e tesoura',
+    ],
+    'Coisas de vó': [
+      'Crochê|Tricô', 'Bolo de fubá|Broa de milho', 'Pudim|Doce de leite', 'Chá de camomila|Chá de boldo', 'Chinelo|Pantufa', 'Rádio de pilha|Vitrola', 'Novela das seis|Programa de auditório', 'Toalhinha de crochê|Tapete de crochê', 'Xícara de porcelana|Bule', 'Goiabada|Compota',
+      'Arnica|Pomada milagrosa', 'Bobes|Laquê', 'Colar de pérolas|Broche', 'Relógio cuco|Relógio de parede', 'Disco de vinil|Fita cassete', 'Palavras cruzadas|Caça-palavras', 'Bengala|Lupa', 'Talco|Perfume de lavanda', 'Sopa|Canja', 'Bolinho de chuva|Pão caseiro',
+      'Cadeira de balanço|Varanda', 'Samambaia|Vaso de violeta', 'Xale|Cachecol de lã',
+    ],
   };
   if (typeof module !== 'undefined') module.exports = PAIRS; else root.INTRUSO_PAIRS = PAIRS;
 })(this);

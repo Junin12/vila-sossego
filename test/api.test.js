@@ -16,7 +16,7 @@ async function main() {
   const get = async (path) => { const r = await fetch(base + path); return { status: r.status, text: await r.text() }; };
 
   // páginas
-  for (const p of ['/', '/cara-de-pau/', '/ninguem-dorme/', '/intruso/', '/intruso/words.js', '/intruso/privacidade.html', '/comum/vila.js', '/cara-de-pau/moradores.js', '/ninguem-dorme/papeis.js']) {
+  for (const p of ['/', '/cara-de-pau/', '/ninguem-dorme/', '/intruso/', '/intruso/words.js', '/intruso/privacidade.html', '/tv/', '/tv/tv.js', '/comum/prendas.js', '/comum/vila.js', '/cara-de-pau/moradores.js', '/ninguem-dorme/papeis.js']) {
     assert.equal((await get(p)).status, 200, p);
   }
   assert.equal((await get('/../server.js')).status, 404);

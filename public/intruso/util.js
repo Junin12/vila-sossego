@@ -19,13 +19,37 @@ function h(tag, props, ...kids) {
   return el;
 }
 
+// Foto no lugar do personagem: o avatar vira "f:<id>:<versão>" e a imagem vem de api/foto da sala.
+let FOTO_BASE = '';
+
 // SVGs vêm de constantes deste arquivo; só o índice do personagem (validado) vem do servidor.
 function av(i, size) {
+  if (typeof i === 'string' && i.startsWith('f:')) {
+    const [, id, v] = i.split(':');
+    const d = h('div', { class: size ? 'av foto' : 'av fill foto', style: size ? `--s:${size}px` : null, role: 'img', 'aria-label': 'foto', 'data-static': 'av' + i });
+    d.append(h('img', { src: `${FOTO_BASE}&id=${encodeURIComponent(id)}&v=${encodeURIComponent(v)}`, alt: '', loading: 'lazy' }));
+    return d;
+  }
   const a = AVATARS[i] || AVATARS[0];
   const d = h('div', { class: size ? 'av' : 'av fill', style: size ? `--s:${size}px;background:${a.bg}` : `background:${a.bg}`,
     role: 'img', 'aria-label': a.name, 'data-static': 'av' + i });
   d.innerHTML = `<svg viewBox="0 0 64 64" aria-hidden="true">${a.art}</svg>`;
   return d;
+}
+
+// Rabisco da dica desenhada: pontos 0..99 "x,y x,y|x,y ..." → SVG (sem innerHTML com dado de jogador)
+function rabisco(draw, cls) {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 100 100');
+  svg.setAttribute('class', cls || 'rabisco');
+  for (const tr of String(draw || '').split('|')) {
+    const pts = tr.trim();
+    if (!/^[0-9, ]+$/.test(pts)) continue;
+    const pl = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+    pl.setAttribute('points', pts);
+    svg.append(pl);
+  }
+  return svg;
 }
 
 function icon(name) {

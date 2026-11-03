@@ -338,3 +338,26 @@
 .other .oe { font-size: 2rem; }
 .other small { display: block; font-weight: 700; opacity: .85; }
 .other b { font: 800 1.2rem var(--display); }
+
+/* novidades da Vila: bots, foto, letra grande, desenho, times, festa e prenda */
+.tag .bot { padding: 0 6px; border: 2px solid var(--ink); border-radius: 6px; background: var(--tint); font-size: .7rem; text-transform: uppercase; }
+.av.foto { background: var(--tint); }
+.av.foto img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.fotobtn { cursor: pointer; }
+html.grande { font-size: 19px; }
+html.grande body { font-size: 1.12rem; }
+.btn.ouvir { min-height: 46px; font-size: .95rem; }
+.pad { display: block; width: 100%; max-width: 320px; aspect-ratio: 1; margin: 0 auto; border: 3px solid var(--ink); border-radius: 16px; background: #fff; touch-action: none; }
+.rabisco { width: 72px; height: 72px; border: 2px solid var(--ink); border-radius: 10px; background: #fff; }
+.rabisco polyline { fill: none; stroke: var(--ink); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.times .time { display: flex; flex-direction: column; gap: 4px; padding: 10px; border: 3px solid var(--ink); border-radius: 16px; text-align: center; }
+.times .t0 { background: #D6E4FF; }
+.times .t1 { background: #FFE0C7; }
+.times .lider { box-shadow: 0 0 0 4px var(--sun); }
+.times .pts { font: 800 1.5rem var(--display); }
+.prenda { align-items: center; text-align: center; background: linear-gradient(160deg, #FFF1B8, #FFD23F); }
+.prenda small { font-weight: 800; text-transform: uppercase; letter-spacing: .08em; opacity: .75; }
+.prenda b { font: 800 1.3rem var(--display); }
+.prenda p { font-weight: 700; font-size: 1.1rem; }
+.placar-festa { background: linear-gradient(160deg, #FFE4F1, #FFC3DD); }
+.tvinfo b { font-weight: 800; }

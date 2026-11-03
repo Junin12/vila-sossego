@@ -10,6 +10,9 @@ Três jogos de festa no mesmo universo (Vila Sossego), cada jogador no seu celul
 - `intruso/servidor.js` + `public/intruso/`: o Intruso (veio do repositório Junin12/Intruso, que agora guarda só o app Android
   e a loja). Tem salas e regras próprias; as partidas somam no Passaporte da Vila (`VilaPass` em `public/intruso/app.js`).
 
+- `festa.js` (Noite de Festa entre jogos), `public/comum/prendas.js` (prendas), `public/tv/` (Telão: conecta em `/<jogo>/api/tv`).
+- Testes de festa/telão/novidades em `test/festa.test.js`.
+
 ## Regras
 - Textos do jogo em português do Brasil.
 - Mecânica e textos próprios: não copiar nomes, cartas ou textos de Coup, Werewolf/Lobisomem ou outros jogos.

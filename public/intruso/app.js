@@ -19,6 +19,10 @@ let toastTimer = null;
 let deadlineAt = 0, deadlineTotal = 0, tkey = '';
 let rv = null;             // sequência de revelação do resultado
 let roundGain = null, matchGain = null;
+let showTv = false, prendaSeen = 0, indo = false;
+const grande = () => ls.get('vila-letra') === '1';
+document.documentElement.classList.toggle('grande', grande());
+const SITE_TV = 'wiapps.com.br/vila/tv';
 
 try { session = JSON.parse(ls.get('intruso-sessao')); } catch { session = null; }
 
@@ -166,6 +170,7 @@ const act = (type, extra) => api('api/act', { code: session.code, pid: session.p
 
 function connect() {
   if (es) es.close();
+  FOTO_BASE = `api/foto?code=${encodeURIComponent(session.code)}`;
   es = new EventSource(`api/events?code=${encodeURIComponent(session.code)}&pid=${encodeURIComponent(session.pid)}`);
   es.onopen = () => { connEl.hidden = true; };
   es.onmessage = (e) => {
@@ -204,6 +209,18 @@ function onState(prev, s) {
     if (s.phase === 'guess') Snd.drum();
     if (s.phase === 'result') startReveal(s);
     if (s.phase === 'final') onFinal(s);
+  }
+  // prenda nova: todo mundo vê quem paga
+  if (s.prenda && s.prenda.n !== prendaSeen) {
+    const first = !prev;
+    prendaSeen = s.prenda.n;
+    if (!first) { Snd.drum(); toast(`🎲 Prenda para ${s.prenda.para}: ${s.prenda.texto}`, true); }
+  }
+  // Noite de Festa: o anfitrião abriu o próximo jogo; a turma vai junto
+  if (s.next && !indo && s.hostId !== s.you) {
+    indo = true;
+    toast('🎉 Próximo jogo da noite!', true);
+    setTimeout(() => { location.href = `../${s.next.slug}/?sala=${encodeURIComponent(s.next.code)}&entrar=1`; }, 1600);
   }
   const k = `${s.matchRound}|${s.phase}|${s.turn}`;
   deadlineAt = s.leftMs ? Date.now() + s.leftMs : 0;
@@ -405,6 +422,12 @@ function settingsPanel(withTotal) {
     withTotal ? h('p', { class: 'hint' }, s.settings.mode
       ? 'O intruso recebe uma palavra parecida, não a mesma. Ele pode nem perceber que é o intruso.'
       : 'O intruso não recebe palavra nenhuma, só a categoria.') : null,
+    withTotal ? settingRow('👨‍👩‍👧 Modo Família', 'familia', o.familia, s.settings.familia, (v) => (v ? 'Ligado' : 'Desligado'), ed) : null,
+    withTotal && s.settings.familia ? h('p', { class: 'hint' }, 'Para todas as idades: sem as categorias de bebidas e de memes, e prendas de família.') : null,
+    withTotal ? settingRow('✏️ Tipo de dica', 'draw', o.draw, s.settings.draw, (v) => (v ? 'Desenho' : 'Palavra'), ed) : null,
+    withTotal && s.settings.draw ? h('p', { class: 'hint' }, 'Na sua vez, você rabisca a dica na tela em vez de escrever. Ótimo para criança e para quem não escreve bem!') : null,
+    withTotal ? settingRow('👥 Times', 'teams', o.teams, s.settings.teams, (v) => (v ? 'Dois times' : 'Cada um por si'), ed) : null,
+    withTotal && s.settings.teams ? h('p', { class: 'hint' }, `A sala vira dois times sorteados (a partir de ${s.teamsFrom} jogadores). Os pontos de cada um somam para o time.`) : null,
     withTotal ? settingRow('Cúmplice', 'accomplice', o.accomplice, s.settings.accomplice, (v) => (v ? 'Ligado' : 'Desligado'), ed) : null,
     withTotal ? h('p', { class: 'hint' }, `Um jogador sabe a palavra e quem é o intruso, e vence se o intruso escapar. Vale com ${s.accompliceFrom} ou mais jogadores`
       + (s.settings.accomplice && few ? ` (faltam ${s.accompliceFrom - s.players.length}).` : '.')) : null,
@@ -499,7 +522,9 @@ function lobbyScreen() {
     h('section', { class: 'stack' },
       h('h2', {}, `Na sala (${s.players.length} de 10)`),
       h('div', { class: 'tags' }, s.players.map((p) => {
-        const inner = [av(p.avatar, 38), h('span', { class: 'nm' }, p.name), p.id === s.hostId ? icon('crown') : null, p.id === s.you ? icon('edit') : null];
+        const inner = [av(p.avatar, 38), h('span', { class: 'nm' }, p.name), p.bot ? h('span', { class: 'bot' }, 'bot') : null,
+          p.id === s.hostId ? icon('crown') : null, p.id === s.you ? icon('edit') : null,
+          host && p.id !== s.you ? h('button', { class: 'ldel', type: 'button', 'data-act': 'kick', 'data-id': p.id, 'aria-label': `Tirar ${p.name}` }, '×') : null];
         const cls = 'tag' + (p.id === s.you ? ' me' : '') + (p.online ? '' : ' off');
         return p.id === s.you
           ? h('button', { type: 'button', class: cls, 'data-act': 'togglePicker', 'data-key': p.id, 'aria-expanded': String(pickerOpen),
@@ -507,7 +532,20 @@ function lobbyScreen() {
           : h('div', { class: cls, 'data-key': p.id }, inner);
       })),
       s.players.length >= s.twoFrom ? h('p', { class: 'sub' }, 'Com 7 ou mais jogadores entram 2 intrusos.') : null,
-      pickerOpen ? h('div', { class: 'panel flat' }, h('h2', {}, 'Trocar personagem'), avatarGrid('pickAvatar', me.avatar, taken)) : null),
+      pickerOpen ? h('div', { class: 'panel flat' }, h('h2', {}, 'Trocar personagem'), avatarGrid('pickAvatar', me.avatar, taken),
+        h('label', { class: 'btn fotobtn' }, '📸 Usar minha foto', h('input', { type: 'file', accept: 'image/*', capture: 'user', 'data-change': 'foto', hidden: true })),
+        h('p', { class: 'hint' }, 'A foto fica só nesta sala, enquanto ela existir. Ninguém guarda.')) : null,
+      host ? h('button', { class: 'btn', type: 'button', 'data-act': 'addBot', disabled: s.players.length >= 10 }, '🤖 Chamar um bot') : null,
+      host && need > 0 ? h('p', { class: 'sub' }, 'Sem gente suficiente? Chame bots e jogue agora.') : null),
+    h('div', { class: 'two' },
+      h('button', { class: 'btn', type: 'button', 'data-act': 'tv' }, '📺 Telão'),
+      h('button', { class: `btn${s.festa ? ' good' : ''}`, type: 'button', 'data-act': 'festa', disabled: !host }, s.festa ? '🎉 Festa ligada' : '🎉 Noite de Festa')),
+    showTv ? h('section', { class: 'panel flat tvinfo', 'data-key': 'tvinfo' }, h('h2', {}, '📺 Jogar no telão'),
+      h('p', {}, 'Na TV ou no notebook, abra ', h('b', {}, SITE_TV), ' e digite o código ', h('b', {}, s.code), '. O telão mostra as dicas, a votação e o placar; a palavra continua só no celular.'),
+      h('a', { class: 'btn', href: `../tv/?sala=${s.code}`, target: '_blank', rel: 'noopener' }, 'Abrir o telão neste aparelho'),
+      s.tv ? h('p', { class: 'hint' }, '📺 Telão conectado!') : null) : null,
+    s.festa ? h('p', { class: 'sub' }, 'Noite de Festa: várias partidas, de qualquer jogo da vila, com um placar só e prenda para quem perde.') : null,
+    festaPlacar(),
     h('section', { class: 'stack' },
       h('h2', {}, 'Categoria'),
       h('div', { class: 'chips' }, s.categories.map((c) => h('button', { type: 'button', class: 'chip', 'data-act': 'category', 'data-v': c,
@@ -584,23 +622,63 @@ function roleCard() {
     h('span', { class: 'hint' }, 'Toque para esconder'));
 }
 
+// "Ouvir minha palavra" (para quem não lê bem): fala no celular, peça para cobrir a tela/ouvido
+function ouvir() {
+  const s = state;
+  if (!secretShown || s.role === 'spectator' || !('speechSynthesis' in window)) return null;
+  return h('button', { class: 'btn ouvir', type: 'button', 'data-act': 'ouvir', 'data-key': 'ouvir' }, '🔊 Ouvir (perto do ouvido)');
+}
+
+// Dica desenhada: tela de rabisco (pontos 0..99), mandada como texto curto
+let traco = [], tracos = [];
+function padDesenho() {
+  const c = h('canvas', { class: 'pad', width: 300, height: 300, 'data-static': 'pad', 'aria-label': 'Área de desenho' });
+  return h('form', { class: 'panel', 'data-form': 'desenho', 'data-key': 'desenho' },
+    h('label', {}, 'Rabisque sua dica (sem letras!)'), c,
+    h('div', { class: 'two' }, h('button', { class: 'btn', type: 'button', 'data-act': 'limparPad' }, 'Apagar'),
+      h('button', { class: 'btn primary', type: 'submit' }, 'Enviar desenho', icon('send'))));
+}
+function ligarPad() {
+  const c = document.querySelector('canvas.pad');
+  if (!c || c._ligado) return;
+  c._ligado = true;
+  traco = []; tracos = [];
+  const x = c.getContext('2d');
+  x.lineWidth = 6; x.lineCap = 'round'; x.lineJoin = 'round'; x.strokeStyle = '#17143F';
+  const ponto = (e) => { const r = c.getBoundingClientRect(); return [Math.max(0, Math.min(99, Math.round((e.clientX - r.left) / r.width * 99))), Math.max(0, Math.min(99, Math.round((e.clientY - r.top) / r.height * 99)))]; };
+  let des = false;
+  c.addEventListener('pointerdown', (e) => { des = true; c.setPointerCapture(e.pointerId); traco = [ponto(e)]; tracos.push(traco); });
+  c.addEventListener('pointermove', (e) => {
+    if (!des) return;
+    const p = ponto(e), u = traco[traco.length - 1];
+    if (Math.abs(p[0] - u[0]) + Math.abs(p[1] - u[1]) < 2) return;
+    traco.push(p);
+    x.beginPath(); x.moveTo(u[0] / 99 * c.width, u[1] / 99 * c.height); x.lineTo(p[0] / 99 * c.width, p[1] / 99 * c.height); x.stroke();
+  });
+  const fim = () => { des = false; };
+  c.addEventListener('pointerup', fim); c.addEventListener('pointercancel', fim);
+}
+const desenhoTexto = () => tracos.filter((t) => t.length > 1).map((t) => t.map((p) => p.join(',')).join(' ')).join('|').slice(0, 2500);
+
 function cluesScreen() {
   const s = state, n = s.order.length, idx = s.turn % n, cur = s.order[idx], mine = isMyTurn(s);
   const volta = Math.floor(s.turn / n) + 1;
   return h('div', { class: 'screen clues', 'data-screen': 'clues' },
     spectatorNote(),
     roleCard(),
+    ouvir(),
     h('div', { class: 'strip', role: 'group', 'aria-label': 'Ordem das dicas' }, s.order.map((id, i) =>
       h('div', { class: 'sp' + (i === idx ? ' now' : i < idx ? ' done' : ''), 'data-key': id }, av(P(id).avatar, 42)))),
     h('div', { class: 'turn' + (mine ? ' mine' : ''), role: 'status' },
       mine ? 'Sua vez de dar uma dica' : `Vez de ${P(cur).name}`, h('small', {}, `Volta ${volta} de ${s.laps} · ${ipLabel(s.impostorCount)}`),
       timerBar('Tempo para a dica')),
-    mine ? h('form', { class: 'panel', 'data-form': 'clue' },
+    mine && s.settings.draw ? padDesenho() : mine ? h('form', { class: 'panel', 'data-form': 'clue' },
       h('div', {}, h('label', { for: 'dica' }, 'Sua dica (uma palavra)'),
         h('input', { id: 'dica', maxlength: 24, autocomplete: 'off', placeholder: s.role === 'impostor' ? 'Disfarce bem' : 'Algo que lembre a palavra' })),
       h('button', { class: 'btn primary', type: 'submit' }, 'Enviar dica', icon('send'))) : null,
     s.clues.length ? h('div', { class: 'clues' }, s.clues.map((c, i) =>
-      h('div', { class: 'bub', 'data-key': 'b' + i }, av(P(c.pid).avatar, 40), h('div', { class: 'txt' }, h('small', {}, P(c.pid).name), h('b', {}, c.text))))) : null);
+      h('div', { class: 'bub', 'data-key': 'b' + i }, av(P(c.pid).avatar, 40), h('div', { class: 'txt' }, h('small', {}, P(c.pid).name),
+        c.draw ? rabisco(c.draw) : h('b', {}, c.text))))) : null);
 }
 
 function voteScreen() {
@@ -712,7 +790,41 @@ const AWARDS = [
   ['suspect', 'Mais suspeito', '🕵️', (v) => `${v} ${v === 1 ? 'voto' : 'votos'} recebidos`],
   ['detective', 'Detetive da noite', '🔍', (v) => `${v} ${v === 1 ? 'acerto' : 'acertos'} no intruso`],
   ['fastest', 'Dica mais rápida', '⚡', (v) => `${(v / 1000).toFixed(1).replace('.', ',')} s por dica`],
+  ['lost', 'Votou no inocente', '🙈', (v) => `${v} ${v === 1 ? 'vez' : 'vezes'}`],
 ];
+
+// Times: soma dos pontos de cada time
+function timesPanel(s) {
+  if (!s.settings.teams || !s.players.some((p) => p.team != null)) return null;
+  const tot = [0, 1].map((t) => s.players.filter((p) => p.team === t).reduce((a, p) => a + p.score, 0));
+  const nomes = ['🔵 Time Azul', '🟠 Time Laranja'];
+  const lider = tot[0] === tot[1] ? -1 : tot[0] > tot[1] ? 0 : 1;
+  return h('section', { class: 'panel times', 'data-key': 'times' }, h('h2', {}, lider < 0 ? '👥 Times empatados!' : `👥 ${nomes[lider]} na frente!`),
+    h('div', { class: 'two' }, [0, 1].map((t) => h('div', { class: `time t${t}${lider === t ? ' lider' : ''}` }, h('b', {}, nomes[t]), h('span', { class: 'pts' }, `${tot[t]} pts`),
+      h('small', {}, s.players.filter((p) => p.team === t).map((p) => p.name).join(', '))))));
+}
+
+// Noite de Festa: placar da noite e próximo jogo
+function festaPlacar() {
+  const f = state && state.festa;
+  if (!f || !f.jogos) return null;
+  return h('section', { class: 'panel placar-festa', 'data-key': 'festa' }, h('h2', {}, `🎉 Noite de Festa · ${f.jogos} jogo(s)`),
+    h('ol', { class: 'rows' }, f.placar.map((p, i) => h('li', { class: 'row', 'data-key': 'f' + i }, h('span', { class: 'rank' }, i + 1), av(p.avatar, 40),
+      h('div', { class: 'rname' }, h('span', { class: 'nm' }, p.name)), h('b', { class: 'pts' }, `${p.pontos}`)))));
+}
+function prendaPanel() {
+  const pr = state.prenda;
+  return h('section', { class: 'panel prenda', 'data-key': 'prenda' },
+    pr ? [h('small', {}, '🎲 Prenda'), h('b', {}, `${pr.para}:`), h('p', {}, pr.texto)] : h('p', { class: 'hint' }, 'Quem ficou em último paga prenda? 😏'),
+    h('button', { class: 'btn', type: 'button', 'data-act': 'prenda' }, pr ? '🎲 Sortear outra' : '🎲 Sortear prenda'));
+}
+function festaNext() {
+  if (!state.festa || !isHost()) return null;
+  const jogos = [['cara-de-pau', '🤥 Cara de Pau'], ['ninguem-dorme', '🌙 Ninguém Dorme'], ['intruso', '🕵️ Intruso']];
+  return h('section', { class: 'panel', 'data-key': 'festa-next' }, h('h2', {}, '🎉 Próximo jogo da noite'),
+    h('div', { class: 'chips' }, jogos.map(([slug, nome]) => h('button', { class: 'chip', type: 'button', 'data-act': 'proximo', 'data-j': slug }, nome))),
+    h('p', { class: 'hint' }, 'A turma toda vai junto, com o mesmo nome. O placar da noite continua.'));
+}
 
 function awardList(s) {
   return AWARDS.filter(([k]) => s.awards && s.awards[k]).map(([k, label, emoji, fmt]) => ({ k, label, emoji, name: P(s.awards[k].pid).name, avatar: P(s.awards[k].pid).avatar, detail: fmt(s.awards[k].value) }));
@@ -740,7 +852,11 @@ function finalScreen() {
     aw.length ? h('section', { class: 'stack' }, h('h2', {}, 'Prêmios da noite'),
       h('div', { class: 'awards' }, aw.map((a) => h('div', { class: 'award', 'data-key': a.k },
         h('span', { class: 'aemoji' }, a.emoji), h('small', {}, a.label), av(a.avatar, 52), h('b', {}, a.name), h('small', {}, a.detail))))) : null,
+    timesPanel(s),
     h('section', { class: 'panel' }, h('h2', {}, 'Classificação final'), scoreRows(null)),
+    festaPlacar(),
+    prendaPanel(),
+    festaNext(),
     gainPanel(matchGain, 'Seu progresso na partida'),
     VilaPass.panel(),
     shopSection(),
@@ -756,11 +872,12 @@ const SCREENS = { lobby: lobbyScreen, intro: introScreen, clues: cluesScreen, vo
 function buildHeader() {
   const t = h('header', { id: 'top', class: 'top' });
   const snd = h('button', { 'data-key': 'snd', class: 'iconbtn', type: 'button', 'data-act': 'sound', 'aria-label': Snd.muted ? 'Ligar som' : 'Desligar som' }, icon(Snd.muted ? 'mute' : 'sound'));
-  if (!state) { t.append(h('span', {}), h('div', { class: 'r' }, snd)); return t; }
+  if (!state) { t.append(h('span', {}), h('div', { class: 'r' }, h('button', { 'data-key': 'aa', class: 'iconbtn', type: 'button', 'data-act': 'letra', 'aria-label': 'Letra grande' }, 'Aa'), snd)); return t; }
   t.append(
     h('button', { class: 'pill', 'data-key': 'room', type: 'button', 'data-act': 'copy', 'aria-label': 'Copiar link da sala' }, 'Sala', h('b', {}, state.code)),
     h('div', { class: 'r' },
       state.matchRound && state.phase !== 'final' ? h('span', { class: 'pill', 'data-key': 'rd' }, `${state.matchRound}/${state.settings.total}`) : null,
+      h('button', { 'data-key': 'aa', class: 'iconbtn', type: 'button', 'data-act': 'letra', 'aria-label': grande() ? 'Letra normal' : 'Letra grande' }, 'Aa'),
       snd,
       h('button', { 'data-key': 'lv', class: 'iconbtn', type: 'button', 'data-act': 'leave', 'aria-label': 'Sair da sala' }, icon('exit'))));
   return t;
@@ -776,6 +893,7 @@ function render() {
 
   const chat = view.querySelector('.chat');
   if (chat && state.chat.length !== lastChat) { chat.scrollTop = chat.scrollHeight; lastChat = state.chat.length; }
+  ligarPad();
   if (focusClue) {
     const inp = document.getElementById('dica');
     if (inp) { inp.focus(); focusClue = false; }
@@ -847,6 +965,26 @@ const ACT = {
   toggleTimes: () => { showTimes = !showTimes; render(); },
   start: () => { Snd.unlock(); act('start'); },
   skip: () => act('skip'),
+  addBot: () => act('addBot'),
+  kick: (el) => act('kick', { id: el.dataset.id }),
+  tv: () => { showTv = !showTv; render(); },
+  festa: () => act('festa'),
+  prenda: () => act('prenda'),
+  letra: () => { const on = !grande(); document.documentElement.classList.toggle('grande', on); ls.set('vila-letra', on ? '1' : '0'); render(); },
+  limparPad: () => { const c = document.querySelector('canvas.pad'); if (c) { c.getContext('2d').clearRect(0, 0, c.width, c.height); tracos = []; traco = []; } },
+  ouvir: () => {
+    const s = state;
+    const txt = s.role === 'impostor' ? `Você é o intruso. A categoria é ${s.wordCategory}.` : `A palavra é ${s.word}. Categoria ${s.wordCategory}.`;
+    try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(txt); u.lang = 'pt-BR'; u.rate = 0.9; u.volume = 0.6; speechSynthesis.speak(u); } catch { /* sem voz */ }
+  },
+  proximo: async (el) => {
+    let r;
+    try { r = await api('api/act', { code: session.code, pid: session.pid, type: 'proximo', jogo: el.dataset.j }); } catch { return; }
+    if (r.slug === 'intruso') ls.set('intruso-sessao', JSON.stringify({ code: r.code, pid: r.pid }));
+    else ls.set(`vila-sessao-${r.slug}`, JSON.stringify({ code: r.code, pid: r.pid }));
+    indo = true;
+    setTimeout(() => { location.href = r.slug === 'intruso' ? `./?sala=${r.code}` : `../${r.slug}/`; }, 1200);
+  },
   next: () => act('next'),
   rematch: () => { act('rematch'); Monet.afterMatch(); },
   buy: (el) => Monet.buy(el.dataset.id),
@@ -882,6 +1020,7 @@ const FORM = {
     enter('api/join', { code });
   },
   clue: (f) => { const text = f.elements.dica.value.trim(); if (text) act('clue', { text }); },
+  desenho: () => { const draw = desenhoTexto(); if (!draw) { toast('Rabisque alguma coisa primeiro.'); return; } act('clue', { draw }); },
   chat: (f) => { const i = f.elements.msg; const text = i.value.trim(); if (text) { i.value = ''; act('chat', { text }); } },
   guess: (f) => { const text = f.elements.palpite.value.trim(); if (text) act('guess', { text }); },
   custom: (f) => api('api/act', { code: session.code, pid: session.pid, type: 'customWords', words: f.elements.custom.value })
@@ -899,5 +1038,32 @@ document.addEventListener('submit', (e) => {
   FORM[f.dataset.form](f);
 });
 
+// Foto do celular → 96x96 JPEG → sala
+document.addEventListener('change', async (e) => {
+  const el = e.target.closest('[data-change="foto"]');
+  if (!el || !el.files || !el.files[0]) return;
+  try {
+    const bmp = await createImageBitmap(el.files[0]);
+    const c = document.createElement('canvas'); c.width = 96; c.height = 96;
+    const lado = Math.min(bmp.width, bmp.height);
+    c.getContext('2d').drawImage(bmp, (bmp.width - lado) / 2, (bmp.height - lado) / 2, lado, lado, 0, 0, 96, 96);
+    let q = 0.8, data = c.toDataURL('image/jpeg', q);
+    while (data.length > 15000 && q > 0.3) { q -= 0.15; data = c.toDataURL('image/jpeg', q); }
+    pickerOpen = false;
+    act('foto', { data });
+  } catch { toast('Não consegui usar essa foto.'); }
+});
+
 render();
 if (session) connect();
+// Noite de Festa: veio pelo link do próximo jogo → entra sozinho com o nome de sempre
+(() => {
+  const q = new URLSearchParams(location.search);
+  const sala = q.get('sala'), nome = ls.get('intruso-nome') || ls.get('vila-nome');
+  if (session && sala && sala.toUpperCase() !== session.code && q.get('entrar') === '1') { if (es) es.close(); session = null; state = null; render(); }
+  if (!session && q.get('entrar') === '1' && sala && nome) {
+    const n = document.getElementById('nome');
+    if (n) n.value = nome;
+    enter('api/join', { code: sala.toUpperCase() });
+  }
+})();

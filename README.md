@@ -41,6 +41,19 @@ Quem sai vira fantasma 👻 (vê tudo e conversa com outros fantasmas). O celula
 ⚰️ Seu Bento, o Coveiro (vê o papel de quem sai, no modo segredo) e 💘 Casal apaixonado (se um sai, o outro sai junto).
 **Noites especiais** (opção): 🌕 Lua cheia (capangas atacam duas), 🎉 Festa junina (ninguém sai), 🌫️ Neblina (voto secreto).
 
+## Para a festa (vale nos três jogos)
+- **📺 Telão:** na TV ou no notebook, abra `wiapps.com.br/vila/tv` e digite o código da sala. Mostra o tabuleiro público
+  (placar, votação, revelações, dicas, prenda) e, no Ninguém Dorme, narra pela caixa de som com sons de noite. Segredos só no celular.
+- **🎉 Noite de Festa:** liga no saguão. Várias partidas, de qualquer jogo, com um placar só (vitória 3, jogar 1; bots não contam).
+  No fim, o anfitrião escolhe o próximo jogo e a turma vai junto, com o mesmo nome.
+- **🎲 Prendas:** quem perde paga uma prenda sorteada (versão família ou turma, sem nada pesado).
+- **👨‍👩‍👧 Modo Família:** prendas e textos para todas as idades, tempos maiores, papéis simples; no Intruso tira bebidas e memes.
+- **Acessibilidade:** botão **Aa** (letra grande), **ouvir** o papel ou a palavra, **dica desenhada** e **mímica** no Intruso.
+- **📸 Foto** no lugar do personagem (fica só na memória da sala) e **Álbum da noite** (cartão para o grupo da família).
+- Cara de Pau: **Duvido com suspense**, **Torneio de família** (3 partidas, troféu) e **cartas da casa** (o morador ganha o nome de alguém).
+- Ninguém Dorme: **narrador humano** (lê o roteiro e não joga), **últimas palavras** de quem é expulso e a tela escurece de noite.
+- Intruso: **bots**, **times**, **dica desenhada**, **mímica** (1 celular) e os pacotes **Brinquedos e brincadeiras** e **Coisas de vó**.
+
 ## Intruso
 Veio do repositório `Junin12/Intruso` (que agora guarda só o app Android e a loja). Roda em `/intruso/` com servidor
 próprio (`intruso/servidor.js`), perfil próprio e o Passaporte da Vila: cada partida (as rodadas até o placar final) soma XP,
