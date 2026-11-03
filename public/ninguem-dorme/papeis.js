@@ -57,7 +57,45 @@
   };
   const CASAL = { nome: 'Casal apaixonado', emoji: '💘', desc: 'Dois moradores da vila são apaixonados e sabem disso. Se um sai, o outro sai junto, de saudade.' };
 
-  const NOITE = { PAPEIS, distribuir, ESPECIAIS, CASAL, MIN: 4, MAX: 12 };
+  // Roteiro do narrador (voz do celular, telão ou o narrador humano lê em voz alta).
+  // g = visão da partida; n(id) = nome; fam = Modo Família (ninguém "some": os capangas "levam para a casa deles").
+  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+  function sumiuTxt(fam) { return fam ? 'foi levado pelos capangas' : 'sumiu'; }
+  function roteiro(g, n, fam) {
+    const a = g.anuncio;
+    const sumiu = sumiuTxt(fam);
+    switch (g.fase) {
+      case 'noite':
+        if (g.especial === 'festa') return 'Noite de festa na Vila Sossego! Todo mundo no arraial. Hoje ninguém sai de casa.';
+        if (g.especial === 'lua') return `Noite ${g.noite}. Lua cheia na Vila Sossego… os capangas estão agitados. Hoje eles podem agir duas vezes. Todo mundo de olhos fechados.`;
+        if (g.especial === 'neblina') return `Noite ${g.noite}. Uma neblina cobre a vila. Amanhã, o voto será secreto. Façam sua parte, em silêncio.`;
+        return pick([
+          `Noite ${g.noite}. A Vila Sossego vai dormir. Todo mundo de olhos fechados. Capangas, Delegada, Vó Zefa e Cotinha: façam sua parte, em silêncio.`,
+          'Cai a noite na Vila Sossego. Silêncio total. Quem tem trabalho noturno, mãos à obra. O resto, conte carneirinhos.',
+          'Escureceu. Os grilos cantam, as janelas se fecham… e alguém está tramando alguma coisa.']);
+      case 'amanhecer': {
+        let t = 'Amanheceu na Vila Sossego! ';
+        if (a && a.sumiu) t += `Mas… ${n(a.sumiu)} ${sumiu} durante a noite! ${a.papel ? 'Era ' + PAPEIS[a.papel].nome + '.' : ''} `;
+        if (a && a.sumiu2) t += `E não foi só isso: ${n(a.sumiu2)} também ${sumiu}! `;
+        if (a && a.saudade) t += `E ${n(a.saudade)}, de tanta saudade, foi embora junto. `;
+        else if (a && a.salvo) t += `Os capangas agiram, mas a Vó Zefa cuidou da vítima. Ninguém ${sumiu}! `;
+        else if (!a || !a.sumiu) t += `Foi uma noite tranquila. Ninguém ${sumiu}. `;
+        if (a && a.fofoca) t += `E a Cotinha já espalhou: ${n(a.fofoca.alvo)} ${a.fofoca.saiu ? 'saiu de casa ontem à noite!' : 'ficou em casa a noite inteira.'}`;
+        return t;
+      }
+      case 'dia': return pick(['Hora da conversa. Quem são os capangas?', 'Vamos lá, vila. Alguém aqui está mentindo. Conversem!', 'Debate aberto. Acusações, defesas e muita cara de pau.']);
+      case 'votacao': return 'Hora de votar! Apontem quem vai sair da vila.';
+      case 'veredito': {
+        const v = g.veredito;
+        if (v && v.expulso) return `A vila decidiu: ${n(v.expulso)} está fora! ${v.papel ? (v.papel === 'capanga' ? 'Era um capanga! Muito bem.' : 'Era ' + PAPEIS[v.papel].nome + '. Xi…') : ''}${v.saudade ? ` E ${n(v.saudade)} foi junto, de saudade.` : ''}`;
+        return v && v.empate ? 'Empate! Ninguém sai hoje.' : 'A vila não se decidiu. Ninguém sai hoje.';
+      }
+      case 'fim': return g.vencedor === 'vila' ? 'Fim de jogo! Os capangas foram descobertos. A vila venceu!' : 'Fim de jogo! Os capangas tomaram conta da Vila Sossego!';
+      default: return '';
+    }
+  }
+
+  const NOITE = { PAPEIS, distribuir, ESPECIAIS, CASAL, roteiro, sumiuTxt, MIN: 4, MAX: 12 };
   if (typeof module !== 'undefined' && module.exports) module.exports = NOITE;
   else root.NOITE = NOITE;
 })(this);

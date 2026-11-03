@@ -32,5 +32,25 @@ const Snd = (() => {
     lose() { [330, 262, 196].forEach((f, i) => tone(f, i * 0.16, 0.26, 'sawtooth', 0.06)); vib([250]); },
     fanfare() { [392, 523, 659, 784, 1047, 784, 1047].forEach((f, i) => tone(f, i * 0.13, 0.22, 'triangle', 0.09)); vib([80, 50, 80, 50, 240]); },
     alarm() { tone(880, 0, 0.08); tone(880, 0.14, 0.08); },
+    // clima de noite (Ninguém Dorme): grilos, coruja e o galo do amanhecer — tudo sintetizado
+    grilos() {
+      for (let k = 0; k < 6; k++) {
+        const t0 = k * 0.55 + Math.random() * 0.15;
+        for (let i = 0; i < 3; i++) tone(4200 + Math.random() * 300, t0 + i * 0.05, 0.035, 'sine', 0.025);
+      }
+    },
+    coruja() { tone(392, 0, 0.35, 'sine', 0.06); tone(330, 0.45, 0.55, 'sine', 0.06); },
+    galo() {
+      const c = get(); if (!c) return;
+      const o = c.createOscillator(), g = c.createGain(), t = c.currentTime;
+      o.type = 'sawtooth';
+      o.frequency.setValueAtTime(500, t); o.frequency.linearRampToValueAtTime(900, t + 0.25);
+      o.frequency.setValueAtTime(950, t + 0.3); o.frequency.linearRampToValueAtTime(1100, t + 0.7); o.frequency.linearRampToValueAtTime(700, t + 1.1);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.05, t + 0.05); g.gain.setValueAtTime(0.05, t + 1);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 1.2);
+      o.connect(g).connect(c.destination); o.start(t); o.stop(t + 1.25);
+    },
+    // "Duvido!" com suspense: rufar crescente
+    suspense() { for (let i = 0; i < 10; i++) tone(120 + i * 6, i * 0.12, 0.1, 'sine', 0.05 + i * 0.006); vib([40, 60, 40, 60, 40, 60, 160]); },
   };
 })();

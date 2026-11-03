@@ -30,8 +30,18 @@ function put(el, ...kids) {
   return el;
 }
 
+// Foto no lugar do personagem: o avatar vira "f:<id>:<versão>" e a imagem vem de api/foto da sala (só na memória do servidor).
+let FOTO_BASE = '';   // "api/foto?code=ABCD" (o telão usa o caminho do jogo)
+const setFotoBase = (b) => { FOTO_BASE = b; };
+
 // SVGs vêm de constantes de avatars.js; só o índice (validado) vem do servidor.
 function av(i, size) {
+  if (typeof i === 'string' && i.startsWith('f:')) {
+    const [, id, v] = i.split(':');
+    const d = h('div', { class: size ? 'av foto' : 'av fill foto', style: size ? `--s:${size}px` : null, role: 'img', 'aria-label': 'foto', 'data-static': 'av' + i });
+    d.append(h('img', { src: `${FOTO_BASE}&id=${encodeURIComponent(id)}&v=${encodeURIComponent(v)}`, alt: '', loading: 'lazy' }));
+    return d;
+  }
   const a = AVATARS[i] || AVATARS[0];
   const d = h('div', { class: size ? 'av' : 'av fill', style: size ? `--s:${size}px;background:${a.bg}` : `background:${a.bg}`,
     role: 'img', 'aria-label': a.name, 'data-static': 'av' + i });
@@ -85,6 +95,18 @@ const Voz = (() => {
     ok,
     on(isHost) { const v = ls.get('vila-voz'); return ok && (v == null ? !!isHost : v === '1'); },
     set(v) { ls.set('vila-voz', v ? '1' : '0'); if (!v && ok) speechSynthesis.cancel(); },
+    // "ouvir meu papel / minha palavra": fala na hora, mesmo com o narrador desligado
+    falar(text) {
+      if (!ok) return false;
+      try {
+        speechSynthesis.cancel();
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang = 'pt-BR'; u.rate = 0.95;
+        if (voice) u.voice = voice;
+        speechSynthesis.speak(u);
+        return true;
+      } catch { return false; }
+    },
     say(text, isHost) {
       if (!this.on(isHost)) return;
       try {
@@ -97,6 +119,11 @@ const Voz = (() => {
     },
   };
 })();
+
+const grande = () => ls.get('vila-letra') === '1';
+// Modo Família: vale para os três jogos (palavras, prendas e textos para todas as idades). Cada jogo pode ajustar mais (onFamilia).
+const FAMILIA = { key: 'familia', label: '👨‍👩‍👧 Modo Família', fmt: (v) => (v ? 'Ligado' : 'Desligado'),
+  hint: (v) => (v ? 'Para todas as idades: textos leves, prendas de família e tempos mais folgados.' : 'Ligue quando tiver criança ou vó na roda.') };
 
 // endereço que vai nos convites de resultado (wiapps.com.br/vila mostra "acordando a vila" e cai no servidor)
 const SITE = 'https://wiapps.com.br/vila/';
@@ -118,6 +145,9 @@ const Vila = (() => {
   let prof = null;
   let myAvatar = 0;
   let quickStart = false;   // "Jogar agora com bots": começa sozinho assim que a sala abrir
+  let showTv = false;       // instruções do telão
+  let prendaSeen = 0;       // última prenda já anunciada
+  let indo = false;         // Noite de Festa: indo para o próximo jogo
   let showTransfer = false;
 
   // ---------- passaporte ----------
@@ -176,6 +206,7 @@ const Vila = (() => {
 
   function enterRoom(s) {
     session = s;
+    setFotoBase(`api/foto?code=${encodeURIComponent(s.code)}`);
     ls.set(`vila-sessao-${J.slug}`, JSON.stringify(s));
     history.replaceState(null, '', location.pathname);
     reactSeen = Infinity; chatSeen = 0; lastResult = null;
@@ -190,6 +221,26 @@ const Vila = (() => {
     if (msg) toast(msg);
     tab = 'home';
     render();
+  }
+
+  // Prenda nova: todo mundo vê quem paga (e o telão também).
+  function anunciarPrenda(prev) {
+    const pr = state.prenda;
+    if (!pr || pr.n === prendaSeen) return;
+    const first = !prev;
+    prendaSeen = pr.n;
+    if (first) return;   // abriu a página agora: não repete
+    Snd.drum();
+    flash({ emoji: '🎲', title: `Prenda para ${pr.para}!`, text: pr.texto, cls: 'sun', ms: 5200 });
+  }
+
+  // Noite de Festa: o anfitrião abriu o próximo jogo; a turma vai junto (entra sozinha com o mesmo nome).
+  function seguirFesta() {
+    const nx = state.next;
+    if (!nx || indo || isHost()) return;
+    indo = true;
+    toast(`🎉 Próximo jogo da noite: ${(state.festa && state.festa.nomes[nx.slug]) || nx.slug}!`, true);
+    setTimeout(() => { location.href = `../${nx.slug}/?sala=${encodeURIComponent(nx.code)}&entrar=1`; }, 1600);
   }
 
   function connect() {
@@ -211,6 +262,8 @@ const Vila = (() => {
       chatSeen = state.chat.length ? state.chat[state.chat.length - 1].n : chatSeen || 1;
       record();
       if (quickStart && state.phase === 'lobby' && state.hostId === state.you) { quickStart = false; act('start'); }
+      anunciarPrenda(prev);
+      seguirFesta();
       try { J.onState(prev, state); } catch (err) { console.error(err); }
       render();
     };
@@ -360,6 +413,7 @@ const Vila = (() => {
 
   // Placar da noite: vitórias de cada um desde que a sala abriu (soma a cada revanche).
   function placar() {
+    if (state && state.festa && state.festa.jogos) return festaPlacar();
     if (!state || !state.round) return null;
     const rows = state.players.slice().sort((a, b) => b.wins - a.wins);
     const top = rows[0] && rows[0].wins;
@@ -372,6 +426,117 @@ const Vila = (() => {
         ? h('p', { class: 'hint center' }, `${rows[0].id === state.you ? 'Você lidera' : rows[0].name + ' lidera'} a noite! Revanche?`) : null);
   }
 
+  // Placar da Noite de Festa: pontos de todos os jogos da noite (vitória 3, presença 1).
+  function festaPlacar() {
+    const f = state.festa;
+    const top = f.placar[0] && f.placar[0].pontos;
+    return h('section', { class: 'panel placar festa', 'data-key': 'festa-placar' },
+      h('h2', {}, '🎉 Noite de Festa', h('small', {}, ` · ${f.jogos} jogo${f.jogos > 1 ? 's' : ''}`)),
+      h('ol', {}, f.placar.map((p, i) => h('li', { class: p.pontos === top ? 'topo' : '', 'data-key': 'fp' + i },
+        h('span', { class: 'pos' }, p.pontos === top ? '👑' : `${i + 1}º`), av(p.avatar, 32), h('b', {}, p.name),
+        h('span', { class: 'wins' }, `${p.pontos} pts`)))),
+      h('p', { class: 'hint center' }, 'Vitória vale 3, jogar vale 1. Bots não contam.'));
+  }
+
+  // Prenda: botão no fim da partida e o cartão da última prenda
+  function prendaPanel() {
+    if (!state) return null;
+    const pr = state.prenda;
+    return h('section', { class: 'panel prenda', 'data-key': 'prenda' },
+      pr ? [h('small', {}, '🎲 Prenda'), h('b', {}, `${pr.para}:`), h('p', {}, pr.texto)] : h('p', { class: 'hint' }, 'Quem perdeu paga prenda? 😏'),
+      h('button', { class: 'btn', type: 'button', 'data-act': 'prenda' }, pr ? '🎲 Sortear outra' : '🎲 Sortear prenda'));
+  }
+
+  // Noite de Festa: o anfitrião escolhe o próximo jogo (a turma vai junto)
+  function festaNext() {
+    if (!state || !state.festa || !isHost()) return null;
+    const jogos = Object.entries(state.festa.nomes);
+    const emoji = { 'cara-de-pau': '🤥', 'ninguem-dorme': '🌙', intruso: '🕵️' };
+    return h('section', { class: 'panel', 'data-key': 'festa-next' }, h('h2', {}, '🎉 Próximo jogo da noite'),
+      h('div', { class: 'chips' }, jogos.map(([slug, nome]) => h('button', { class: 'chip', type: 'button', 'data-act': 'proximo', 'data-j': slug },
+        `${emoji[slug] || '🎲'} ${nome}`))),
+      h('p', { class: 'hint' }, 'A turma toda vai junto, com o mesmo nome. O placar da noite continua.'));
+  }
+
+  // Álbum da noite: um cartão (imagem) com o campeão, os destaques e a frase da noite
+  function fraseDaNoite() {
+    const chat = (state.chat || []).filter((m) => m.ch === 'sala' && !P(m.pid).bot);
+    const rs = state.reactions || [];
+    let best = null, bestN = 0;
+    chat.forEach((m, i) => {
+      const fim = chat[i + 1] ? chat[i + 1].n : Infinity;
+      const n = rs.filter((r) => r.n > m.n && r.n < fim && r.e === '😂').length;
+      if (n > bestN) { best = m; bestN = n; }
+    });
+    return best ? `"${best.text}" — ${P(best.pid).name}` : null;
+  }
+
+  async function album() {
+    const a = J.album ? J.album(state) : null;
+    if (!a) return;
+    const W = 1080, H = 1350, c = document.createElement('canvas');
+    c.width = W; c.height = H;
+    const x = c.getContext('2d');
+    const grad = x.createLinearGradient(0, 0, 0, H);
+    grad.addColorStop(0, a.cor1 || '#3B49F0'); grad.addColorStop(1, a.cor2 || '#17143F');
+    x.fillStyle = grad; x.fillRect(0, 0, W, H);
+    x.fillStyle = '#FFD23F'; x.font = '800 44px "Bricolage Grotesque", system-ui, sans-serif'; x.textAlign = 'center';
+    x.fillText('🏘️ VILA SOSSEGO · ÁLBUM DA NOITE', W / 2, 90);
+    x.fillStyle = '#fff'; x.font = '800 96px "Bricolage Grotesque", system-ui, sans-serif';
+    x.fillText(a.titulo, W / 2, 230);
+    // avatares do(s) destaque(s)
+    const imgs = await Promise.all(a.avatares.slice(0, 3).map((i) => avatarImg(i)));
+    const size = imgs.length > 1 ? 230 : 300;
+    imgs.forEach((img, k) => {
+      const cx = W / 2 + (k - (imgs.length - 1) / 2) * (size + 30), cy = 470;
+      x.save(); x.beginPath(); x.arc(cx, cy, size / 2, 0, Math.PI * 2); x.closePath(); x.fillStyle = '#fff'; x.fill(); x.clip();
+      if (img) x.drawImage(img, cx - size / 2, cy - size / 2, size, size);
+      x.restore();
+      x.lineWidth = 12; x.strokeStyle = '#17143F'; x.beginPath(); x.arc(cx, cy, size / 2, 0, Math.PI * 2); x.stroke();
+    });
+    x.fillStyle = '#FFD23F'; x.font = '800 64px "Bricolage Grotesque", system-ui, sans-serif';
+    x.fillText(a.destaque, W / 2, 720);
+    x.fillStyle = '#fff'; x.font = '700 40px Figtree, system-ui, sans-serif';
+    let y = 820;
+    const frase = fraseDaNoite();
+    for (const l of [...a.linhas, ...(frase ? ['😂 Frase da noite:', frase] : [])].slice(0, 9)) {
+      for (const parte of quebra(x, l, W - 140)) { x.fillText(parte, W / 2, y); y += 52; }
+      y += 10;
+    }
+    x.fillStyle = 'rgba(255,255,255,.75)'; x.font = '700 34px Figtree, system-ui, sans-serif';
+    x.fillText('wiapps.com.br/vila', W / 2, H - 50);
+    const blob = await new Promise((r) => c.toBlob(r, 'image/png'));
+    const file = new File([blob], 'album-da-noite.png', { type: 'image/png' });
+    try {
+      if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: 'Álbum da noite' }); return; }
+    } catch { return; }
+    const link = h('a', { href: URL.createObjectURL(blob), download: 'album-da-noite.png' });
+    document.body.append(link); link.click(); link.remove();
+    toast('Álbum salvo! 📸', true);
+  }
+  function quebra(x, t, max) {
+    const out = []; let linha = '';
+    for (const w of String(t).split(' ')) {
+      const teste = linha ? linha + ' ' + w : w;
+      if (x.measureText(teste).width > max && linha) { out.push(linha); linha = w; } else linha = teste;
+    }
+    if (linha) out.push(linha);
+    return out;
+  }
+  function avatarImg(i) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve(img); img.onerror = () => resolve(null);
+      if (typeof i === 'string' && i.startsWith('f:')) { const [, id, v] = i.split(':'); img.src = `${FOTO_BASE}&id=${id}&v=${v}`; return; }
+      const a = AVATARS[i] || AVATARS[0];
+      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" fill="${a.bg}"/>${a.art}</svg>`);
+    });
+  }
+  function albumButton() {
+    if (!J.album) return null;
+    return h('button', { class: 'btn', type: 'button', 'data-act': 'album', 'data-key': 'albumbtn' }, '📸 Álbum da noite');
+  }
+
   // Contar o resultado pra turma (WhatsApp / compartilhar do celular).
   function shareButton() {
     if (!J.shareText) return null;
@@ -379,12 +544,15 @@ const Vila = (() => {
   }
 
   function endButtons() {
+    const extra = [prendaPanel(), albumButton(), festaNext()];
     if (isHost()) {
-      return h('div', { class: 'two', 'data-key': 'endbtns' },
-        h('button', { class: 'btn primary', type: 'button', 'data-act': 'start' }, 'Jogar de novo'),
-        h('button', { class: 'btn', type: 'button', 'data-act': 'lobby' }, 'Saguão'));
+      return h('div', { class: 'endstack', 'data-key': 'endbtns' }, extra,
+        h('div', { class: 'two' },
+          h('button', { class: 'btn primary', type: 'button', 'data-act': 'start' }, 'Jogar de novo'),
+          h('button', { class: 'btn', type: 'button', 'data-act': 'lobby' }, 'Saguão')));
     }
-    return h('p', { class: 'hint light center', 'data-key': 'endbtns' }, `Esperando ${P(state.hostId).name} começar outra…`);
+    return h('div', { class: 'endstack', 'data-key': 'endbtns' }, extra,
+      h('p', { class: 'hint light center' }, `Esperando ${P(state.hostId).name} começar outra…`));
   }
 
   // ---------- telas ----------
@@ -400,6 +568,7 @@ const Vila = (() => {
     t.append(h('div', { class: 'r' },
       J.voz && Voz.ok ? h('button', { class: `iconbtn${Voz.on(isHost()) ? '' : ' off'}`, type: 'button', 'data-act': 'voz',
         'aria-label': Voz.on(isHost()) ? 'Desligar narrador' : 'Ligar narrador', title: 'Narrador por voz' }, '🎙️') : null,
+      h('button', { class: 'iconbtn', type: 'button', 'data-act': 'letra', 'aria-label': grande() ? 'Letra normal' : 'Letra grande', 'aria-pressed': String(grande()) }, 'Aa'),
       h('button', { class: 'iconbtn', type: 'button', 'data-act': 'sound', 'aria-label': Snd.muted ? 'Ligar som' : 'Desligar som' }, icon(Snd.muted ? 'mute' : 'sound')),
       h('button', { class: 'iconbtn', type: 'button', 'data-act': 'rules', 'aria-label': 'Como jogar' }, '?')));
     return t;
@@ -526,15 +695,24 @@ const Vila = (() => {
         av(p.avatar, 38), h('span', { class: 'nm' }, p.name), p.bot ? h('span', { class: 'bot' }, 'bot') : null,
         p.id === state.hostId ? icon('crown') : null, p.id === state.you ? icon('edit') : null,
         host && p.id !== state.you ? h('button', { class: 'ldel', type: 'button', 'data-act': 'kick', 'data-id': p.id, 'aria-label': `Tirar ${p.name}` }, '×') : null))),
-        picker ? avatarGrid('pickAvatar', meP.avatar, taken) : null,
+        picker ? [avatarGrid('pickAvatar', meP.avatar, taken),
+          h('label', { class: 'btn fotobtn' }, '📸 Usar minha foto',
+            h('input', { type: 'file', accept: 'image/*', capture: 'user', 'data-change': 'foto', hidden: true })),
+          h('p', { class: 'hint' }, 'A foto fica só nesta sala, enquanto ela existir. Ninguém guarda.')] : null,
         host ? h('button', { class: 'btn', type: 'button', 'data-act': 'addBot', disabled: state.players.length >= state.max }, '🤖 Chamar um bot') : null,
         host && !enough ? h('p', { class: 'hint' }, `Precisa de pelo menos ${state.min}. Sem gente? Chame bots e jogue agora.`) : null),
+      h('div', { class: 'two' },
+        h('button', { class: 'btn', type: 'button', 'data-act': 'tv' }, '📺 Telão'),
+        h('button', { class: `btn${state.festa ? ' good' : ''}`, type: 'button', 'data-act': 'festa', disabled: !host, 'aria-pressed': String(!!state.festa) },
+          state.festa ? '🎉 Festa ligada' : '🎉 Noite de Festa')),
+      state.festa ? h('p', { class: 'hint light center' }, 'Noite de Festa: várias partidas, de qualquer jogo, com um placar só e prenda para quem perde.') : null,
       placar(),
       h('section', { class: 'panel' }, h('h2', {}, 'Regras da sala'),
-        J.settings.map((s) => h('div', { class: 'setrow' }, h('span', { class: 'setlbl' }, s.label),
+        [FAMILIA, ...J.settings].map((s) => h('div', { class: 'setrow' }, h('span', { class: 'setlbl' }, s.label),
           h('div', { class: 'chips' }, state.options[s.key].map((v) => h('button', { class: 'chip', type: 'button', 'data-act': 'setting',
             'data-k': s.key, 'data-v': JSON.stringify(v), 'aria-pressed': String(state.settings[s.key] === v), disabled: !host }, s.fmt(v)))),
           s.hint ? h('small', { class: 'hint' }, s.hint(state.settings[s.key])) : null))),
+      J.lobby ? J.lobby(state) : null,
       host ? h('button', { class: 'btn primary big', type: 'button', 'data-act': 'start', disabled: !enough },
         enough ? `Começar ${J.nome}` : `Faltam ${state.min - state.players.length} jogador(es)`)
         : h('p', { class: 'lead center' }, `Esperando ${P(state.hostId).name} começar…`),
@@ -551,6 +729,22 @@ const Vila = (() => {
         h('button', { class: 'btn primary', type: 'button', 'data-act': 'closeRules' }, 'Entendi!')));
   }
 
+  function tvSheet() {
+    const tvUrl = `${SITE}tv`;
+    const local = `../tv/?sala=${state.code}`;
+    return h('div', { class: 'sheet', 'data-act': 'closeTv' },
+      h('div', { class: 'sheet-body', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Telão' },
+        h('div', { class: 'sheet-head' }, h('h2', {}, '📺 Jogar no telão'),
+          h('button', { class: 'iconbtn', type: 'button', 'data-act': 'closeTv', 'aria-label': 'Fechar' }, '×')),
+        h('p', {}, 'A TV (ou o notebook) mostra o tabuleiro para todo mundo: código, placar, votação, revelações e o narrador falando pela caixa de som. Os segredos continuam só no celular de cada um.'),
+        h('ol', { class: 'passos' },
+          h('li', {}, 'No navegador da TV ou do notebook, abra ', h('b', {}, tvUrl.replace('https://', ''))),
+          h('li', {}, 'Digite o código da sala: ', h('b', { class: 'tvcode' }, state.code))),
+        h('a', { class: 'btn', href: local, target: '_blank', rel: 'noopener' }, 'Abrir o telão neste aparelho'),
+        state.tv ? h('p', { class: 'fact ok center' }, '📺 Telão conectado!') : null,
+        h('button', { class: 'btn primary', type: 'button', 'data-act': 'closeTv' }, 'Entendi!')));
+  }
+
   function render() {
     morph($top, header());
     let next;
@@ -563,7 +757,7 @@ const Vila = (() => {
     const cur = $view.firstElementChild;
     if (!cur || cur.getAttribute('data-screen') !== next.getAttribute('data-screen')) { $view.replaceChildren(next); window.scrollTo(0, 0); }
     else { syncAttrs(cur, next); morph(cur, next); }
-    const modal = h('div', {}, showRules ? rulesSheet() : null);
+    const modal = h('div', {}, showRules ? rulesSheet() : null, showTv && state ? tvSheet() : null);
     morph($modal, modal);
     for (const c of document.querySelectorAll('.chat')) {
       if (c._seen !== c.dataset.n) { c.scrollTop = c.scrollHeight; c._seen = c.dataset.n; }
@@ -626,7 +820,12 @@ const Vila = (() => {
     whats: () => { window.open('https://wa.me/?text=' + encodeURIComponent(shareText()), '_blank', 'noopener'); },
     addBot: () => act('addBot'),
     kick: (el) => act('kick', { id: el.dataset.id }),
-    setting: (el) => act('setting', { key: el.dataset.k, value: JSON.parse(el.dataset.v) }),
+    setting: async (el) => {
+      const key = el.dataset.k, value = JSON.parse(el.dataset.v);
+      await act('setting', { key, value });
+      // Modo Família ligado: o jogo ajusta o resto (ex.: tempos maiores, papéis simples)
+      if (key === 'familia' && value && J.onFamilia) for (const [k, v] of J.onFamilia()) await act('setting', { key: k, value: v });
+    },
     start: () => { Snd.unlock(); act('start'); },
     lobby: () => act('lobby'),
     leave: () => {
@@ -637,7 +836,42 @@ const Vila = (() => {
     react: (el) => { act('react', { i: Number(el.dataset.i) }); },
     sound: () => { Snd.toggle(); render(); },
     voz: () => { Voz.set(!Voz.on(isHost())); toast(Voz.on(isHost()) ? '🎙️ Narrador ligado neste celular' : 'Narrador desligado', true); render(); },
+    tv: () => { showTv = true; render(); },
+    closeTv: (el, e) => { if (el.classList.contains('sheet') && e.target !== el) return; showTv = false; render(); },
+    festa: () => act('festa'),
+    prenda: () => act('prenda'),
+    album: () => { album().catch(() => toast('Não consegui montar o álbum.')); },
+    letra: () => { const on = !grande(); document.documentElement.classList.toggle('grande', on); ls.set('vila-letra', on ? '1' : '0'); render(); },
+    proximo: async (el) => {
+      const jogo = el.dataset.j;
+      let r;
+      try { r = await api('act', { code: session.code, pid: session.pid, type: 'proximo', jogo }); } catch (e) { toast(e.message); return; }
+      // o anfitrião já entra na sala nova; a turma recebe o link pelo state.next
+      if (r.slug === 'intruso') ls.set('intruso-sessao', JSON.stringify({ code: r.code, pid: r.pid }));
+      else ls.set(`vila-sessao-${r.slug}`, JSON.stringify({ code: r.code, pid: r.pid }));
+      indo = true;
+      setTimeout(() => { location.href = `../${r.slug}/`; }, 1200);
+    },
   };
+
+  // Foto do celular → 96x96 JPEG (pequena) → sala
+  async function enviarFoto(file) {
+    if (!file) return;
+    try {
+      const bmp = await createImageBitmap(file);
+      const c = document.createElement('canvas'); c.width = 96; c.height = 96;
+      const lado = Math.min(bmp.width, bmp.height);
+      c.getContext('2d').drawImage(bmp, (bmp.width - lado) / 2, (bmp.height - lado) / 2, lado, lado, 0, 0, 96, 96);
+      let q = 0.8, data = c.toDataURL('image/jpeg', q);
+      while (data.length > 15000 && q > 0.3) { q -= 0.15; data = c.toDataURL('image/jpeg', q); }
+      picker = false;
+      await act('foto', { data });
+    } catch { toast('Não consegui usar essa foto.'); }
+  }
+  document.addEventListener('change', (e) => {
+    const el = e.target.closest('[data-change="foto"]');
+    if (el) enviarFoto(el.files && el.files[0]);
+  });
   const FORM = {
     join: (f) => {
       const code = f.elements.codigo.value.replace(/[^a-z]/gi, '').toUpperCase();
@@ -668,14 +902,23 @@ const Vila = (() => {
   function start(jogo) {
     J = jogo;
     document.body.classList.add('j-' + J.slug);
+    document.documentElement.classList.toggle('grande', grande());
     loadProf();
     try { session = JSON.parse(ls.get(`vila-sessao-${J.slug}`)); } catch { session = null; }
+    if (session) setFotoBase(`api/foto?code=${encodeURIComponent(session.code)}`);
     const sala = new URLSearchParams(location.search).get('sala');
     if (session && sala && sala.toUpperCase() !== session.code) session = null;   // link de outra sala: entra nela
     const comBots = new URLSearchParams(location.search).get('bots') === '1';
     if (comBots) session = null;   // pediu partida nova com bots
     if (session) connect();
     render();
+    // Noite de Festa: veio pelo link do próximo jogo → entra sozinho com o nome de sempre
+    const q = new URLSearchParams(location.search);
+    if (!session && q.get('entrar') === '1' && sala && (ls.get('vila-nome') || ls.get('intruso-nome'))) {
+      const n = document.getElementById('nome');
+      if (n && !n.value) n.value = ls.get('vila-nome') || ls.get('intruso-nome');
+      enter('join', { code: sala.toUpperCase() });
+    }
     // link "jogar com bots" do portal: começa direto se o nome já é conhecido
     if (comBots) {
       history.replaceState(null, '', location.pathname);
@@ -686,6 +929,7 @@ const Vila = (() => {
 
   return {
     start, render, ACT, FORM, act, move, toast, flash, confetti, tmr, reactBar, chatPanel, resultPanel, endButtons, placar, shareButton,
+    fraseDaNoite,
     P, nameOf, isHost, get state() { return state; }, get prof() { return prof; },
   };
 })();

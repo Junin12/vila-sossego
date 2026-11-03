@@ -2,7 +2,10 @@
 // Tela do Cara de Pau. A base (início, saguão, passaporte, chat, reações) vem de ../comum/vila.js.
 
 const { MORADORES: M, ACOES: A, EVENTOS: E } = window.VILA;
-const cardName = (c) => `${M[c].emoji} ${M[c].curto}`;
+// cartas da casa: a família pode dar outro nome a um morador (a ação é a mesma)
+const apelido = (c) => { const st = Vila.state; return (st && st.extra && st.extra.apelidos && st.extra.apelidos[c]) || null; };
+const curto = (c) => apelido(c) || M[c].curto;
+const cardName = (c) => `${M[c].emoji} ${curto(c)}`;
 const GENERIC_EMOJI = { bico: '🔨', mudanca: '📦', escandalo: '📣', labia: '🤥' };
 let picking = null;      // ação escolhida esperando alvo ou carta
 let seenLog = 0;         // último lance já mostrado (sons e revelações)
@@ -12,9 +15,9 @@ function cardEl(c, o = {}) {
   if (!c) return h('div', { class: cls + ' back', 'aria-label': 'segredo escondido' }, h('span', { class: 'q' }, '?'));
   const m = M[c];
   return h(o.act ? 'button' : 'div', { class: cls, style: `--c:${m.cor}`, type: o.act ? 'button' : null, 'data-act': o.act || null,
-    'data-i': o.i != null ? o.i : null, 'aria-label': `${m.curto}${o.lost ? ' (perdido)' : ''}` },
+    'data-i': o.i != null ? o.i : null, 'aria-label': `${curto(c)}${o.lost ? ' (perdido)' : ''}` },
   h('span', { class: 'emo', 'aria-hidden': 'true' }, m.emoji),
-  h('b', {}, m.curto),
+  h('b', {}, curto(c)),
   !o.small ? h('small', {}, A[m.acao].nome) : null,
   !o.small && m.bloqueia.length ? h('small', { class: 'blk' }, `bloqueia ${A[m.bloqueia[0]].nome}`) : null);
 }
@@ -172,6 +175,21 @@ function awards(g) {
   return out;
 }
 
+// Torneio de família: 3 partidas, troféu "Maior Cara de Pau da Família"
+function torneioPanel(g) {
+  const se = g.serie;
+  if (!se) return null;
+  if (!se.fim) {
+    return h('section', { class: 'panel torneio', 'data-key': 'torneio' }, h('h2', {}, `🏆 Torneio de família · partida ${se.n} de ${se.total}`),
+      h('div', { class: 'facts' }, Object.entries(se.pontos).sort((a, b) => b[1] - a[1]).map(([id, n]) => h('span', { class: 'fact' }, `${Vila.P(id).name}: ${n} 🏆`))));
+  }
+  const c = Vila.P(se.campeao);
+  return h('section', { class: 'panel torneio fim', 'data-key': 'torneio' },
+    h('span', { class: 'trofeu' }, '🏆'), h('small', {}, 'Torneio de família'), av(c.avatar, 96),
+    h('b', {}, c.name), h('p', {}, 'Maior Cara de Pau da Família!'),
+    h('small', {}, `${se.pontos[se.campeao]} vitória(s) · ${se.blefes[se.campeao]} blefes que colaram`));
+}
+
 function endScreen(g) {
   const s = Vila.state;
   const ws = g.winners || [g.winner];
@@ -182,6 +200,7 @@ function endScreen(g) {
     h('div', { class: `banner ${won ? 'win' : 'lose'}` }, title,
       h('small', {}, g.how === 'labia' ? 'Na lábia: enganou a vila vezes suficientes 🤥' : ws.length > 1 ? 'A última dupla que sobrou na vila' : 'Último morador que sobrou na vila')),
     h('div', { class: 'winner' }, ws.map((id) => av(Vila.P(id).avatar, ws.length > 1 ? 96 : 120))),
+    torneioPanel(g),
     Vila.placar(),
     h('section', { class: 'panel' }, h('h2', {}, 'Todos os segredos'),
       g.players.map((p) => h('div', { class: 'reveal-row', 'data-key': 'r' + p.id }, av(Vila.P(p.id).avatar, 40),
@@ -214,8 +233,32 @@ const Jogo = {
       hint: (v) => (v === 1 ? 'Um segredo só e 3 moedas: partida de uns 3 minutos.' : 'Dois segredos por jogador.') },
     { key: 'duplas', label: 'Duplas', fmt: (v) => (v ? '🤝 Ligado' : 'Cada um por si'),
       hint: (v) => (v ? 'Com 4 ou 6: quem senta em frente é sua dupla. Vocês veem os segredos um do outro, não se atacam e vencem juntos.' : 'Todo mundo contra todo mundo.') },
+    { key: 'torneio', label: '🏆 Torneio de família', fmt: (v) => (v ? '3 partidas' : 'Desligado'),
+      hint: (v) => (v ? 'Vale a série de 3 partidas. No fim: troféu de Maior Cara de Pau da Família.' : 'Cada partida vale por si.') },
     { key: 'reactSecs', label: 'Tempo para duvidar', fmt: (v) => `${v}s` },
   ],
+  // cartas da casa (saguão): o anfitrião dá nome a um morador
+  lobby(s) {
+    const host = s.hostId === s.you;
+    const ap = (s.extra && s.extra.apelidos) || {};
+    return h('section', { class: 'panel', 'data-key': 'cartas-casa' }, h('h2', {}, '🏠 Cartas da casa'),
+      h('p', { class: 'hint' }, 'Dê o nome de alguém da família a um morador ("Tio Zé"). A ação continua a mesma.'),
+      Object.keys(ap).length ? h('div', { class: 'facts' }, Object.entries(ap).map(([c, n]) => h('span', { class: 'fact' }, `${M[c].emoji} ${n}`,
+        host ? h('button', { class: 'ldel', type: 'button', 'data-act': 'tirarApelido', 'data-c': c, 'aria-label': `Tirar ${n}` }, '×') : null))) : null,
+      host ? h('form', { class: 'form-row', 'data-form': 'apelido' },
+        h('select', { name: 'carta', 'aria-label': 'Morador' }, Object.keys(M).map((k) => h('option', { value: k }, `${M[k].emoji} ${M[k].curto}`))),
+        h('input', { name: 'nome', maxlength: 16, placeholder: 'Tio Zé', 'aria-label': 'Nome da carta' }),
+        h('button', { class: 'btn', type: 'submit' }, 'OK')) : null);
+  },
+  album(s) {
+    const g = s.game;
+    if (!g || g.phase !== 'end') return null;
+    const ws = g.winners || [g.winner];
+    const linhas = awards(g).map(([e, t, id, sub]) => `${e} ${t}: ${Vila.P(id).name} (${sub})`);
+    if (g.serie && g.serie.fim) linhas.unshift(`🏆 Maior Cara de Pau da Família: ${Vila.P(g.serie.campeao).name}`);
+    return { titulo: '🤥 Cara de Pau', avatares: ws.map((id) => Vila.P(id).avatar), cor1: '#FFB86B', cor2: '#C2421D',
+      destaque: ws.length > 1 ? `${ws.map((id) => Vila.P(id).name).join(' e ')} venceram!` : `${Vila.P(ws[0]).name} venceu!`, linhas };
+  },
   over: (s) => !!(s.game && s.game.phase === 'end'),
   rules() {
     return h('div', { class: 'rules' },
@@ -268,9 +311,14 @@ const Jogo = {
     const n = Vila.nameOf;
     for (const e of news) {
       if (e.t === 'duvida') {
-        Snd.drum();
-        if (e.had) Vila.flash({ emoji: '😳', title: 'Tinha mesmo!', text: `${n(e.of)} era ${cardName(e.card)} de verdade. ${n(e.by)} se deu mal!`, cls: 'good' });
-        else Vila.flash({ emoji: '🤥', title: 'ERA BLEFE!', text: `${n(e.by)} pegou ${n(e.of)} na mentira!`, cls: 'bad' });
+        // suspense: a carta vira devagar, com rufar, antes de mostrar o resultado
+        Snd.suspense();
+        Vila.flash({ emoji: '🃏', title: 'DUVIDO!', text: `${n(e.by)} duvidou de ${n(e.of)}… será que é ${cardName(e.card)}?`, cls: 'suspense', ms: 1700 });
+        setTimeout(() => {
+          Snd.drum();
+          if (e.had) Vila.flash({ emoji: M[e.card].emoji, title: 'Tinha mesmo!', text: `${n(e.of)} era ${cardName(e.card)} de verdade. ${n(e.by)} se deu mal!`, cls: 'good revela' });
+          else Vila.flash({ emoji: '🤥', title: 'ERA BLEFE!', text: `${n(e.by)} pegou ${n(e.of)} na mentira!`, cls: 'bad revela' });
+        }, 1700);
       } else if (e.t === 'evento' && e.volta > 1) {
         Snd.fanfare();
         Vila.flash({ emoji: E[e.e].emoji, title: E[e.e].nome, text: E[e.e].desc, cls: 'sun', ms: 2800 });
@@ -309,7 +357,17 @@ const Jogo = {
   },
 };
 
+Object.assign(Vila.FORM, {
+  apelido: (f) => {
+    const nome = f.elements.nome.value.trim();
+    if (!nome) { Vila.toast('Digite o nome.'); return; }
+    Vila.act('custom', { acao: 'apelido', carta: f.elements.carta.value, nome });
+    f.elements.nome.value = '';
+  },
+});
+
 Object.assign(Vila.ACT, {
+  tirarApelido: (el) => Vila.act('custom', { acao: 'apelido', carta: el.dataset.c, nome: '' }),
   choose: (el) => {
     const a = el.dataset.a;
     if (A[a].alvo || a === 'mudanca') { picking = a; Vila.render(); }

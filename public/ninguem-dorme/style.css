@@ -102,3 +102,17 @@
 .partners.love .pchip { background: #FFC7DF; }
 .partners.love small { font-weight: 600; opacity: .85; }
 .event.night-ev { background: #FFE9A8; }
+
+/* de noite a tela escurece (clima) */
+body.escuro { --bg: #0B0E2A; --bg2: #05061A; }
+body.escuro .panel, body.escuro .role { filter: brightness(.9); }
+/* últimas palavras */
+.ultimas { display: flex; flex-direction: column; gap: 4px; width: 100%; padding: 12px 14px; border: 3px solid var(--ink); border-radius: 16px; background: #FFF1B8; text-align: center; animation: pop .4s both; }
+.ultimas small { font-weight: 800; opacity: .75; }
+.ultimas p { font: 800 1.25rem/1.25 var(--display); }
+.ultimas-form { width: 100%; }
+/* narrador humano */
+.roteiro { background: #FFF6D6; }
+.roteiro small { font-weight: 800; text-transform: uppercase; letter-spacing: .06em; opacity: .7; }
+.roteiro p { font: 700 1.2rem/1.45 var(--body); }
+.btn.ouvir { min-height: 46px; font-size: .95rem; }

@@ -1,7 +1,9 @@
 'use strict';
 // Tela do Ninguém Dorme. A base (início, saguão, passaporte, chat, reações, narrador) vem de ../comum/vila.js.
 
-const { PAPEIS: R, distribuir, ESPECIAIS: ESP, CASAL } = window.NOITE;
+const { PAPEIS: R, distribuir, ESPECIAIS: ESP, CASAL, roteiro, sumiuTxt } = window.NOITE;
+const fam = () => !!(Vila.state && Vila.state.settings.familia);   // Modo Família: textos leves
+const narrando = (s) => !!(s && s.settings.narrador);               // narrador humano conduz (sem voz do celular)
 const papelName = (r) => `${R[r].emoji} ${R[r].nome}`;
 let roleShown = false;     // o papel fica escondido até tocar (proteção contra olhadas)
 let sheep = 0;             // carneirinhos contados de noite
@@ -21,6 +23,11 @@ function roleCard(me) {
     h('small', { class: 'team' }, r.time === 'capangas' ? 'Time dos capangas 🦹' : 'Time da vila 🏘️'),
     h('small', {}, r.desc),
     h('small', { class: 'hint-hide' }, 'Toque para esconder'));
+}
+// botão "ouvir meu papel" (para quem não lê bem): fica fora do cartão
+function ouvirPapel(me) {
+  if (!roleShown || !Voz.ok) return null;
+  return h('button', { class: 'btn ouvir', type: 'button', 'data-act': 'ouvirPapel', 'data-key': 'ouvir' }, '🔊 Ouvir meu papel (cubra o celular)');
 }
 
 function partners(s, g) {
@@ -98,6 +105,7 @@ function nightScreen(s, g) {
       Vila.tmr()),
     especialBanner(g.especial),
     me && me.vivo ? roleCard(me) : null,
+    me && me.vivo ? ouvirPapel(me) : null,
     me ? partners(s, g) : null,
     amor(g),
     box,
@@ -118,8 +126,8 @@ function newsBlock(g) {
       h('div', {}, h('b', {}, 'Teve festa junina!'), h('small', {}, 'Ninguém saiu de casa… oficialmente.'))));
   }
   if (a.sumiu) {
-    items.push(gone(a.sumiu, a.papel, 'n-sumiu', 'sumiu!'));
-    if (a.sumiu2) items.push(gone(a.sumiu2, a.papel2, 'n-sumiu2', 'também sumiu! 🌕'));
+    items.push(gone(a.sumiu, a.papel, 'n-sumiu', `${sumiuTxt(fam())}!`));
+    if (a.sumiu2) items.push(gone(a.sumiu2, a.papel2, 'n-sumiu2', `também ${sumiuTxt(fam())}! 🌕`));
     if (a.salvo) {
       items.push(h('div', { class: 'news good', 'data-key': 'n-salvo2' }, h('span', { class: 'ne' }, '🌿'),
         h('div', {}, h('b', {}, 'A Vó Zefa salvou alguém!'), h('small', {}, 'Os capangas atacaram duas vezes, mas uma vítima escapou.'))));
@@ -201,6 +209,45 @@ function voteScreen(s, g) {
     Vila.reactBar());
 }
 
+// Últimas palavras: quem foi expulso tem uns segundos para um recado final (aparece grande para todos e no telão)
+function ultimasBox(s, g) {
+  const v = g.veredito;
+  if (!v || !v.expulso) return null;
+  if (g.ultimas) return h('div', { class: 'ultimas', 'data-key': 'ult' }, h('small', {}, `🗣️ Últimas palavras de ${Vila.P(g.ultimas.pid).name}`), h('p', {}, `“${g.ultimas.text}”`));
+  if (v.expulso !== s.you) return h('p', { class: 'hint center', 'data-key': 'ult' }, `${Vila.P(v.expulso).name} pode deixar as últimas palavras…`);
+  return h('form', { class: 'form-row ultimas-form', 'data-form': 'ultimas', 'data-key': 'ult' },
+    h('input', { name: 'txt', maxlength: 90, autocomplete: 'off', placeholder: 'Suas últimas palavras…', 'aria-label': 'Últimas palavras' }),
+    h('button', { class: 'btn primary', type: 'submit' }, 'Dizer'));
+}
+
+// Narrador humano: quem criou a sala conduz a mesa (lê o roteiro em voz alta) e vê tudo, mas não joga
+function narradorScreen(s, g) {
+  const n = (id) => Vila.P(id).name;
+  const fase = { noite: `🌙 Noite ${g.noite}`, amanhecer: '☀️ Amanhecer', dia: `🗣️ Dia ${g.dia}`, votacao: '🗳️ Votação', veredito: '⚖️ Veredito', fim: '🏁 Fim' }[g.fase];
+  const acoes = g.narr && g.narr.acoes ? Object.entries(g.narr.acoes) : [];
+  return h('div', { class: 'screen', 'data-screen': 'nd-narrador' },
+    h('div', { class: 'phase-head' }, h('span', { class: 'moon' }, '🎙️'), h('div', {}, h('small', {}, 'Você é o narrador'), h('h2', {}, fase)), Vila.tmr()),
+    h('section', { class: 'panel roteiro', 'data-key': 'rot-' + g.fase + g.noite + g.dia }, h('small', {}, '📜 Leia em voz alta'),
+      h('p', {}, roteiroFixo(g))),
+    g.fase === 'noite' ? h('section', { class: 'panel flat', 'data-key': 'narr-noite' }, h('h3', {}, 'O que estão fazendo agora'),
+      acoes.length ? acoes.map(([id, alvo]) => h('div', { class: 'vrow' }, h('b', {}, `${R[g.players.find((p) => p.id === id).papel].emoji} ${n(id)}`), '→',
+        alvo ? h('span', {}, n(alvo)) : h('span', {}, 'ficou em casa'))) : h('p', { class: 'hint' }, 'Ninguém agiu ainda.'),
+      h('p', { class: 'hint' }, `Ainda acordados: ${g.waiting.length}`)) : null,
+    g.fase === 'veredito' ? ultimasBox(s, g) : null,
+    h('section', { class: 'panel', 'data-key': 'narr-papeis' }, h('h3', {}, 'Quem é quem (só você vê)'),
+      h('div', { class: 'whois' }, g.players.map((p) => h('div', { class: `wi ${R[p.papel].time}${p.vivo ? '' : ' dead'}` },
+        av(Vila.P(p.id).avatar, 44), h('b', {}, n(p.id), g.casal && g.casal.includes(p.id) ? ' 💘' : ''), h('small', {}, papelName(p.papel)))))),
+    g.fase === 'fim' ? Vila.endButtons() : null,
+    Vila.chatPanel({ title: 'Conversa da vila', cls: 'flat' }));
+}
+// o roteiro sorteia variações; fixa uma por fase para não mudar a cada atualização da tela
+let rotKey = '', rotTxt = '';
+function roteiroFixo(g) {
+  const k = `${g.fase}|${g.noite}|${g.dia}`;
+  if (k !== rotKey) { rotKey = k; rotTxt = roteiro(g, (id) => Vila.P(id).name, fam()); }
+  return rotTxt;
+}
+
 function verdictScreen(s, g) {
   const v = g.veredito;
   const ex = v && v.expulso ? Vila.P(v.expulso) : null;
@@ -211,7 +258,8 @@ function verdictScreen(s, g) {
     ex ? h('section', { class: 'panel verdict' }, av(ex.avatar, 120), h('b', { class: 'vt' }, `A vila expulsou ${ex.name}!`),
       v.papel ? h('span', { class: `fact ${v.papel === 'capanga' ? 'ok' : 'no'}` }, v.papel === 'capanga' ? `Era ${papelName(v.papel)}! 🎯` : `Era ${papelName(v.papel)}… ops! 😬`)
         : h('span', { class: 'fact' }, 'O papel fica em segredo… 🤐'),
-      v.saudade ? h('span', { class: 'fact no' }, `💔 ${Vila.P(v.saudade).name} saiu junto, de saudade${v.papelSaudade ? ` (era ${papelName(v.papelSaudade)})` : ''}`) : null)
+      v.saudade ? h('span', { class: 'fact no' }, `💔 ${Vila.P(v.saudade).name} saiu junto, de saudade${v.papelSaudade ? ` (era ${papelName(v.papelSaudade)})` : ''}`) : null,
+      ultimasBox(s, g))
       : h('section', { class: 'panel verdict' }, h('span', { class: 'big-emoji' }, v && v.empate ? '🤝' : '🤷'),
         h('b', { class: 'vt' }, v && v.empate ? 'Empate! Ninguém saiu.' : 'A vila não se decidiu. Ninguém saiu.')),
     h('section', { class: 'panel flat' }, h('h3', {}, 'Como cada um votou'),
@@ -254,39 +302,10 @@ function endScreen(s, g) {
 }
 
 // ---------- narrador ----------
+// Voz do celular de quem criou a sala; com telão, quem narra é o telão; com narrador humano, ninguém fala.
 function narrate(s, g) {
-  const host = Vila.isHost();
-  const n = (id) => Vila.P(id).name;
-  const a = g.anuncio;
-  switch (g.fase) {
-    case 'noite':
-      if (g.especial === 'festa') return Voz.say('Noite de festa junina na Vila Sossego! Todo mundo no arraial. Hoje ninguém sai de casa.', host);
-      if (g.especial === 'lua') return Voz.say(`Noite ${g.noite}. Lua cheia na Vila Sossego… os capangas estão agitados. Hoje eles podem atacar duas vezes. Todo mundo de olhos fechados.`, host);
-      if (g.especial === 'neblina') return Voz.say(`Noite ${g.noite}. Uma neblina cobre a vila. Amanhã, o voto será secreto. Façam sua parte, em silêncio.`, host);
-      return Voz.say(pick([
-        `Noite ${g.noite}. A Vila Sossego vai dormir. Todo mundo de olhos fechados. Capangas, Delegada, Vó Zefa e Cotinha: façam sua parte, em silêncio.`,
-        `Cai a noite na Vila Sossego. Silêncio total. Quem tem trabalho noturno, mãos à obra. O resto, conte carneirinhos.`,
-        `Escureceu. Os grilos cantam, as janelas se fecham… e alguém está tramando alguma coisa.`]), host);
-    case 'amanhecer': {
-      let t = 'Amanheceu na Vila Sossego! ';
-      if (a && a.sumiu) t += `Mas… ${n(a.sumiu)} sumiu durante a noite! ${a.papel ? 'Era ' + R[a.papel].nome + '.' : ''} `;
-      if (a && a.sumiu2) t += `E não foi só isso: ${n(a.sumiu2)} também sumiu! `;
-      if (a && a.saudade) t += `E ${n(a.saudade)}, de tanta saudade, foi embora junto. `;
-      else if (a && a.salvo) t += 'Os capangas atacaram, mas a Vó Zefa cuidou da vítima. Ninguém sumiu! ';
-      else t += 'Foi uma noite tranquila. Ninguém sumiu. ';
-      if (a && a.fofoca) t += `E a Cotinha já espalhou: ${n(a.fofoca.alvo)} ${a.fofoca.saiu ? 'saiu de casa ontem à noite!' : 'ficou em casa a noite inteira.'}`;
-      return Voz.say(t, host);
-    }
-    case 'dia': return Voz.say(pick(['Hora da conversa. Quem são os capangas?', 'Vamos lá, vila. Alguém aqui está mentindo. Conversem!', 'Debate aberto. Acusações, defesas e muita cara de pau.']), host);
-    case 'votacao': return Voz.say('Hora de votar! Apontem quem vai sair da vila.', host);
-    case 'veredito': {
-      const v = g.veredito;
-      if (v && v.expulso) return Voz.say(`A vila decidiu: ${n(v.expulso)} está fora! ${v.papel ? (v.papel === 'capanga' ? 'Era um capanga! Muito bem.' : 'Era ' + R[v.papel].nome + '. Xi…') : ''}${v.saudade ? ` E ${n(v.saudade)} foi junto, de saudade.` : ''}`, host);
-      return Voz.say(v && v.empate ? 'Empate! Ninguém sai hoje.' : 'A vila não se decidiu. Ninguém sai hoje.', host);
-    }
-    case 'fim': return Voz.say(g.vencedor === 'vila' ? 'Fim de jogo! Os capangas foram descobertos. A vila venceu!' : 'Fim de jogo! Os capangas tomaram conta da Vila Sossego!', host);
-    default: return null;
-  }
+  if (narrando(s)) return null;
+  return Voz.say(roteiroFixo(g), Vila.isHost() && !s.tv);
 }
 
 const FRASES = ['Confia em mim 😇', 'Juro que tava dormindo 😴', 'Eu sou da vila! 🏘️', 'Prova! Cadê a prova? 🤨', 'Votem comigo! 🗳️', 'Tá quieto demais… 👀'];
@@ -303,6 +322,8 @@ const Jogo = {
       hint: (v) => (v ? 'Mais fácil: todo mundo vê o papel de quem sai.' : 'Mais difícil: os papéis só aparecem no fim (e o Coveiro entra no jogo).') },
     { key: 'extras', label: 'Papéis novos', fmt: (v) => (v ? 'Ligados' : 'Clássico'),
       hint: (v) => (v ? 'Vigia, Zé Pinguço, Coveiro e o Casal apaixonado entram conforme o tamanho da vila.' : 'Só os papéis básicos.') },
+    { key: 'narrador', label: '🎙️ Narrador', fmt: (v) => (v ? 'Uma pessoa' : 'Voz do celular'),
+      hint: (v) => (v ? 'Quem criou a sala narra lendo o roteiro na tela e não joga (precisa de 5 pessoas).' : 'O celular de quem criou a sala (ou o telão) narra sozinho.') },
     { key: 'especiais', label: 'Noites especiais', fmt: (v) => (v ? 'Ligadas' : 'Desligadas'),
       hint: (v) => (v ? 'De vez em quando: lua cheia, festa junina ou neblina.' : 'Toda noite é igual.') },
   ],
@@ -328,6 +349,7 @@ const Jogo = {
   },
   game(s) {
     const g = s.game;
+    if (narrando(s) && s.hostId === s.you) return narradorScreen(s, g);
     if (g.fase === 'noite') return nightScreen(s, g);
     if (g.fase === 'amanhecer') return dawnScreen(s, g);
     if (g.fase === 'dia') return dayScreen(s, g);
@@ -335,16 +357,33 @@ const Jogo = {
     if (g.fase === 'veredito') return verdictScreen(s, g);
     return endScreen(s, g);
   },
+  // Modo Família: papéis simples, sem noites especiais e com mais tempo para conversar
+  onFamilia() { return [['extras', 0], ['especiais', 0], ['diaSecs', 180], ['noiteSecs', 60]]; },
+  album(s) {
+    const g = s.game;
+    if (!g || g.fase !== 'fim') return null;
+    const time = g.players.filter((p) => R[p.papel].time === g.vencedor);
+    const linhas = [`${g.vencedor === 'vila' ? '🏘️' : '🦹'} Time vencedor: ${time.map((p) => Vila.P(p.id).name).join(', ')}`];
+    const caps = g.players.filter((p) => p.papel === 'capanga').map((p) => Vila.P(p.id).name);
+    linhas.push(`🦹 Capanga(s): ${caps.join(', ')}`);
+    if (g.casal) linhas.push(`💘 Casal: ${g.casal.map((id) => Vila.P(id).name).join(' e ')}`);
+    linhas.push(`🌙 ${g.noite} noite(s) na Vila Sossego`);
+    return { titulo: '🌙 Ninguém Dorme', avatares: time.slice(0, 3).map((p) => Vila.P(p.id).avatar), cor1: '#4A57B8', cor2: '#121741',
+      destaque: g.vencedor === 'vila' ? 'A vila venceu!' : 'Os capangas venceram!', linhas };
+  },
   onState(prev, s) {
     const g = s.game;
+    document.body.classList.toggle('escuro', !!(g && g.fase === 'noite'));   // a tela escurece de noite
     if (!g) { roleShown = false; sheep = 0; seenLog = 0; return; }
     const pg = prev && prev.game && prev.round === s.round ? prev.game : null;
     if (!pg) { roleShown = false; sheep = 0; }
     const changed = !pg || pg.fase !== g.fase || pg.noite !== g.noite;
     if (!changed || !prev) return;   // recarregou a página: não repete narração
+    const clima = Vila.isHost() && !s.tv;   // o telão faz o clima quando está ligado
     if (g.fase === 'noite') {
       sheep = 0;
       Snd.low();
+      if (clima) { setTimeout(() => Snd.grilos(), 600); setTimeout(() => Snd.coruja(), 3500); }
       if (g.especial) {
         const e = ESP[g.especial];
         Vila.flash({ emoji: e.emoji, title: e.nome, text: e.desc, cls: g.especial === 'festa' ? 'sun' : 'night', ms: 3400 });
@@ -356,14 +395,14 @@ const Jogo = {
         roleShown = true;
       }
     } else if (g.fase === 'amanhecer') {
-      Snd.turn();
+      if (clima) Snd.galo(); else Snd.turn();
       const a = g.anuncio;
       if (a && a.sumiu === s.you) Vila.flash({ emoji: '👻', title: 'Você sumiu!', text: 'Agora você é um fantasma. Assista e fofoque com os outros fantasmas.', cls: 'night', ms: 3400 });
       else if (a && (a.sumiu2 === s.you || a.saudade === s.you)) {
         Vila.flash({ emoji: a.saudade === s.you ? '💔' : '👻', title: a.saudade === s.you ? 'Você saiu de saudade!' : 'Você sumiu!',
           text: a.saudade === s.you ? 'Seu amor sumiu e a vila perdeu a graça. Agora você é um fantasma.' : 'Lua cheia… os capangas atacaram duas vezes.', cls: 'night', ms: 3400 });
       } else if (a && a.sumiu && a.sumiu2) Vila.flash({ emoji: '🌕', title: 'Duas pessoas sumiram!', text: `${Vila.P(a.sumiu).name} e ${Vila.P(a.sumiu2).name}.`, cls: 'bad' });
-      else if (a && a.sumiu) Vila.flash({ emoji: '😱', title: `${Vila.P(a.sumiu).name} sumiu!`, text: a.papel ? `Era ${papelName(a.papel)}.` : '', cls: 'bad' });
+      else if (a && a.sumiu) Vila.flash({ emoji: fam() ? '🏚️' : '😱', title: `${Vila.P(a.sumiu).name} ${sumiuTxt(fam())}!`, text: a.papel ? `Era ${papelName(a.papel)}.` : '', cls: 'bad' });
       else Vila.flash({ emoji: a && a.salvo ? '🌿' : '😌', title: 'Ninguém sumiu!', text: a && a.salvo ? 'A Vó Zefa salvou alguém!' : 'Noite tranquila.', cls: 'good' });
     } else if (g.fase === 'votacao') {
       Snd.alarm();
@@ -400,7 +439,17 @@ const Jogo = {
   },
 };
 
+Object.assign(Vila.FORM, {
+  ultimas: (f) => { const t = f.elements.txt.value.trim(); if (t) Vila.move({ t: 'ultimas', text: t }); },
+});
+
 Object.assign(Vila.ACT, {
+  ouvirPapel: () => {
+    const g = Vila.state.game;
+    if (!g || !g.me) return;
+    const r = R[g.me.papel];
+    Voz.falar(`Você é ${r.nome}. ${r.time === 'capangas' ? 'Time dos capangas.' : 'Time da vila.'} ${r.desc}`);
+  },
   toggleRole: () => { roleShown = !roleShown; Vila.render(); },
   night: (el) => {
     Snd.pop();
