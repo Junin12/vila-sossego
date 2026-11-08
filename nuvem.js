@@ -52,7 +52,9 @@ function armazemArquivo(dir) {
 
 function armazemSupabase(url, chave) {
   const base = `${url.replace(/\/$/, '')}/rest/v1/vila_kv`;
-  const cab = { apikey: chave, Authorization: `Bearer ${chave}`, 'Content-Type': 'application/json' };
+  // chave antiga (service_role, um JWT "eyJ…") vai também no Authorization; a nova (sb_secret_…) só no apikey
+  const cab = { apikey: chave, 'Content-Type': 'application/json' };
+  if (chave.startsWith('eyJ')) cab.Authorization = `Bearer ${chave}`;
   return {
     tipo: 'supabase',
     async get(k) {
