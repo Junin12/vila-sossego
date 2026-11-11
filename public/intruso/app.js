@@ -26,6 +26,26 @@ const SITE_TV = 'wiapps.com.br/vila/tv';
 
 try { session = JSON.parse(ls.get('intruso-sessao')); } catch { session = null; }
 
+// Tela acesa enquanto a pessoa está numa sala: celular largado na mesa não apaga nem cai da partida.
+// Se o navegador não tiver Wake Lock, não faz nada. O navegador solta a trava ao trocar de app; volta ao reabrir.
+const TelaAcesa = (() => {
+  let trava = null, querer = false, pedindo = false;
+  async function pedir() {
+    if (!querer || trava || pedindo || document.hidden || !('wakeLock' in navigator)) return;
+    pedindo = true;
+    try {
+      trava = await navigator.wakeLock.request('screen');
+      trava.addEventListener('release', () => { trava = null; });
+      if (!querer) { trava.release().catch(() => {}); trava = null; }
+    } catch { trava = null; } finally { pedindo = false; }
+  }
+  document.addEventListener('visibilitychange', pedir);
+  return {
+    ligar() { querer = true; pedir(); },
+    desligar() { querer = false; if (trava) trava.release().catch(() => {}); trava = null; },
+  };
+})();
+
 // ---------- Passaporte da Vila (mesmo endereço dos outros jogos da vila = mesmo passaporte) ----------
 // As rodadas vão somando aqui; no placar final a partida inteira conta no passaporte (ver ../comum/perfil.js).
 const VilaPass = (() => {
@@ -170,7 +190,8 @@ const act = (type, extra) => api('api/act', { code: session.code, pid: session.p
 
 function connect() {
   if (es) es.close();
-  FOTO_BASE = `api/foto?code=${encodeURIComponent(session.code)}`;
+  TelaAcesa.ligar();
+  FOTO_BASE =`api/foto?code=${encodeURIComponent(session.code)}`;
   es = new EventSource(`api/events?code=${encodeURIComponent(session.code)}&pid=${encodeURIComponent(session.pid)}`);
   es.onopen = () => { connEl.hidden = true; };
   es.onmessage = (e) => {
@@ -191,6 +212,7 @@ function connect() {
 function leave() {
   if (es) es.close();
   clearTimeout(rv && rv.timer); rv = null;
+  TelaAcesa.desligar();
   ls.del('intruso-sessao');
   session = null; state = null; tab = 'home';
   history.replaceState(null, '', location.pathname);

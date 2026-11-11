@@ -10,6 +10,26 @@ const ls = {
   del(k) { try { localStorage.removeItem(k); } catch { /* idem */ } },
 };
 
+// Tela acesa enquanto a pessoa está numa sala: celular largado na mesa não apaga nem cai da partida.
+// Se o navegador não tiver Wake Lock, não faz nada. O navegador solta a trava ao trocar de app; volta ao reabrir.
+const TelaAcesa = (() => {
+  let trava = null, querer = false, pedindo = false;
+  async function pedir() {
+    if (!querer || trava || pedindo || document.hidden || !('wakeLock' in navigator)) return;
+    pedindo = true;
+    try {
+      trava = await navigator.wakeLock.request('screen');
+      trava.addEventListener('release', () => { trava = null; });
+      if (!querer) { trava.release().catch(() => {}); trava = null; }
+    } catch { trava = null; } finally { pedindo = false; }
+  }
+  document.addEventListener('visibilitychange', pedir);
+  return {
+    ligar() { querer = true; pedir(); },
+    desligar() { querer = false; if (trava) trava.release().catch(() => {}); trava = null; },
+  };
+})();
+
 // Monta elementos só com textContent/atributos: nada de innerHTML com dado de jogador.
 function h(tag, props, ...kids) {
   const el = document.createElement(tag);
@@ -218,6 +238,7 @@ const Vila = (() => {
   function leaveRoom(msg) {
     if (es) es.close();
     es = null; session = null; state = null; showQR = false; picker = false;
+    TelaAcesa.desligar();
     ls.del(`vila-sessao-${J.slug}`);
     $conn.hidden = true;
     if (msg) toast(msg);
@@ -286,6 +307,7 @@ const Vila = (() => {
 
   function connect() {
     if (es) es.close();
+    TelaAcesa.ligar();
     es = new EventSource(`api/events?code=${encodeURIComponent(session.code)}&pid=${encodeURIComponent(session.pid)}`);
     es.onmessage = (e) => {
       errors = 0;
