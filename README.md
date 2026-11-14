@@ -71,3 +71,15 @@ Deploy: Render (Blueprint do `render.yaml`, auto-deploy do `main`).
 
 ## Endereço wiapps.com.br/vila
 O jogo roda no Render (https://vila-sossego.onrender.com). A pasta `cpanel-vila/` vai em `public_html/vila` no cPanel: a página "Acordando a vila…" chama o servidor até ele responder (o plano grátis dorme) e entra mantendo o caminho e o código da sala.
+
+<!-- manutencao:inicio -->
+## Manutenção (resumo)
+
+> Resumo para manter o app. Atualizado em 14/11/2026. Visão de todos os apps: https://wiapps.com.br/documentacao/ (com senha).
+
+- **O que faz:** Três jogos de festa, cada um no seu celular: Cara de Pau (blefe), Ninguém Dorme (cidade dorme) e Intruso.
+- **No ar:** https://wiapps.com.br/vila/ · Servidor (Render): https://vila-sossego.onrender.com/
+- **Rodar no PC:** node server.js 3010 (config "vila" do launch.json) · npm test — regras, passaporte e partidas inteiras com bots pela API · Publicar sempre com npm test && git commit && git push (com ; já subiu com teste falhando).
+- **Publicar:** Sozinho: push no main → o Render publica (Blueprint render.yaml). A página de espera do cPanel (cpanel-vila/) só muda à mão.
+- **Chaves e senhas:** Servidor: variáveis no painel do Render e `.env` local (fora do Git). Firebase: configuração pública em `public/intruso/firebase-config.js`. Android: `android/keystore.properties`, fora do Git. Nunca coloque o valor de uma chave neste arquivo.
+<!-- manutencao:fim -->
